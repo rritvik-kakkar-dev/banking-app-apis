@@ -1,9 +1,6 @@
 package com.banking.banking_app_apis.service.impl;
 
-import com.banking.banking_app_apis.dto.AccountInfo;
-import com.banking.banking_app_apis.dto.BankResponse;
-import com.banking.banking_app_apis.dto.EmailDetails;
-import com.banking.banking_app_apis.dto.UserRequest;
+import com.banking.banking_app_apis.dto.*;
 import com.banking.banking_app_apis.entity.User;
 import com.banking.banking_app_apis.repository.UserRepository;
 import com.banking.banking_app_apis.utils.AccountUtils;
@@ -21,12 +18,13 @@ public class UserServiceImpl implements UserService{
     @Autowired
     EmailService emailService;
 
+    /**
+     * Creating an account - saving a new user into the db
+     * Check if user already has an account
+     */
+
     @Override
     public BankResponse createAccount(UserRequest userRequest) {
-        /**
-         * Creating an account - saving a new user into the db
-         * Check if user already has an account
-         */
 
         if(userRepository.existsByEmail(userRequest.getEmail())) {
             return BankResponse.builder()
@@ -79,5 +77,57 @@ public class UserServiceImpl implements UserService{
                         .accountName(fullName)
                         .build())
                 .build();
+    }
+
+
+    /**
+     * Balance Enquiry
+     * Name Enquiry
+     * Credit
+     * Debit
+     * Transfer
+     */
+    @Override
+    public BankResponse balanceEnquiry(EnquiryRequest enquiryRequest) {
+        // Check if the provided account number exists in the DB
+        boolean isAccountExists = userRepository.existsByAccountNumber(enquiryRequest.getAccountNumber());
+        if(!isAccountExists) {
+            return BankResponse.builder()
+                    .responseCode(AccountUtils.ACCOUNT_NOT_EXISTS_CODE)
+                    .responseMessage(AccountUtils.ACCOUNT_NOT_EXISTS_MESSAGE)
+                    .accountInfo(null)
+                    .build();
+        }
+
+        User foundUser = userRepository.findByAccountNumber(enquiryRequest.getAccountNumber());
+
+        String fullName = foundUser.getFirstName() + " "
+                + foundUser.getLastName()
+                + (foundUser.getOtherName() != null ? " " + foundUser.getOtherName() : "");
+
+        return BankResponse.builder()
+                .responseCode(AccountUtils.ACCOUNT_FOUND_CODE)
+                .responseMessage(AccountUtils.ACCOUNT_FOUND_MESSAGE)
+                .accountInfo(AccountInfo.builder()
+                        .accountBalance(foundUser.getAccountBalance())
+                        .accountNumber(foundUser.getAccountNumber())
+                        .accountName(fullName)
+                        .build())
+                .build();
+    }
+
+    @Override
+    public String nameEnquiry(EnquiryRequest enquiryRequest) {
+        // Check if the provided account number exists in the DB
+        boolean isAccountExists = userRepository.existsByAccountNumber(enquiryRequest.getAccountNumber());
+        if(!isAccountExists) {
+            return AccountUtils.ACCOUNT_FOUND_MESSAGE;
+        }
+
+        User foundUser = userRepository.findByAccountNumber(enquiryRequest.getAccountNumber());
+
+        return foundUser.getFirstName() + " "
+                + foundUser.getLastName()
+                + (foundUser.getOtherName() != null ? " " + foundUser.getOtherName() : "");
     }
 }
