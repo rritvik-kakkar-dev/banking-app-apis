@@ -19,6 +19,9 @@ public class UserServiceImpl implements UserService{
     @Autowired
     EmailService emailService;
 
+    @Autowired
+    TransactionService transactionService;
+
     /**
      * Creating an account - saving a new user into the db
      * Check if user already has an account
@@ -148,6 +151,15 @@ public class UserServiceImpl implements UserService{
         userToCredit.setAccountBalance(currentBalance.add(creditDebitRequest.getAmount()));
         userRepository.save(userToCredit);
 
+        // Save Transaction
+        TransactionDto transactionDto = TransactionDto.builder()
+                .accountNumber(userToCredit.getAccountNumber())
+                .transactionType("CREDIT")
+                .amount(creditDebitRequest.getAmount())
+                .build();
+
+        transactionService.saveTransaction(transactionDto);
+
         String fullName = userToCredit.getFirstName() + " "
                 + userToCredit.getLastName()
                 + (userToCredit.getOtherName() != null ? " " + userToCredit.getOtherName() : "");
@@ -192,6 +204,15 @@ public class UserServiceImpl implements UserService{
 
         userToDebit.setAccountBalance(currentBalance.subtract(creditDebitRequest.getAmount()));
         userRepository.save(userToDebit);
+
+        // Save Transaction
+        TransactionDto transactionDto = TransactionDto.builder()
+                .accountNumber(userToDebit.getAccountNumber())
+                .transactionType("DEBIT")
+                .amount(creditDebitRequest.getAmount())
+                .build();
+
+        transactionService.saveTransaction(transactionDto);
 
         String fullName = userToDebit.getFirstName() + " "
                 + userToDebit.getLastName()
@@ -241,14 +262,23 @@ public class UserServiceImpl implements UserService{
         sourceAccount.setAccountBalance(currentSourceAccountBalance.subtract(transferRequest.getAmount()));
         userRepository.save(sourceAccount);
 
-        // Send Debit Amount Email Alert
-        EmailDetails debitAlert = EmailDetails.builder()
-                .subject("DEBIT ALERT")
-                .recipient(sourceAccount.getEmail())
-                .messageBody("The sum of " + transferRequest.getAmount() + " has been deducted from you account! Your Current Balance is " + sourceAccount.getAccountBalance())
+        // Save Transaction
+        TransactionDto DebitransactionDto = TransactionDto.builder()
+                .accountNumber(sourceAccount.getAccountNumber())
+                .transactionType("DEBIT")
+                .amount(transferRequest.getAmount())
                 .build();
 
-        emailService.sendEmailAlert(debitAlert);
+        transactionService.saveTransaction(DebitransactionDto);
+
+        // Send Debit Amount Email Alert
+//        EmailDetails debitAlert = EmailDetails.builder()
+//                .subject("DEBIT ALERT")
+//                .recipient(sourceAccount.getEmail())
+//                .messageBody("The sum of " + transferRequest.getAmount() + " has been deducted from you account! Your Current Balance is " + sourceAccount.getAccountBalance())
+//                .build();
+//
+//        emailService.sendEmailAlert(debitAlert);
 
         // Get the account to credit
         User destinationAccount = userRepository.findByAccountNumber(transferRequest.getDestinationAccountNumber());
@@ -258,14 +288,23 @@ public class UserServiceImpl implements UserService{
         destinationAccount.setAccountBalance(currentDestinationAccountBalance.add(transferRequest.getAmount()));
         userRepository.save(destinationAccount);
 
-        // Send Credit Amount Email Alert
-        EmailDetails creditAlert = EmailDetails.builder()
-                .subject("CREDIT ALERT")
-                .recipient(destinationAccount.getEmail())
-                .messageBody("The sum of " + transferRequest.getAmount() + " has been credited to you account from " + sourceAccountUserFullName + ". Your Current Balance is " + destinationAccount.getAccountBalance())
+        // Save Transaction
+        TransactionDto creditTransactionDto = TransactionDto.builder()
+                .accountNumber(destinationAccount.getAccountNumber())
+                .transactionType("CREDIT")
+                .amount(transferRequest.getAmount())
                 .build();
 
-        emailService.sendEmailAlert(creditAlert);
+        transactionService.saveTransaction(creditTransactionDto);
+
+        // Send Credit Amount Email Alert
+//        EmailDetails creditAlert = EmailDetails.builder()
+//                .subject("CREDIT ALERT")
+//                .recipient(destinationAccount.getEmail())
+//                .messageBody("The sum of " + transferRequest.getAmount() + " has been credited to you account from " + sourceAccountUserFullName + ". Your Current Balance is " + destinationAccount.getAccountBalance())
+//                .build();
+//
+//        emailService.sendEmailAlert(creditAlert);
 
         return BankResponse.builder()
                 .responseCode(AccountUtils.TRANSFER_SUCCESS_CODE)
