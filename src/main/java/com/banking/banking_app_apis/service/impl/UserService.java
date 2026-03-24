@@ -6,6 +6,8 @@ public interface UserService {
 
     BankResponse createAccount(UserRequest userRequest);
 
+    BankResponse login(LoginDto loginDto);
+
     BankResponse balanceEnquiry(EnquiryRequest enquiryRequest);
 
     String nameEnquiry(EnquiryRequest enquiryRequest);

@@ -1,10 +1,16 @@
 package com.banking.banking_app_apis.service.impl;
 
+import com.banking.banking_app_apis.config.JwtTokenProvider;
 import com.banking.banking_app_apis.dto.*;
+import com.banking.banking_app_apis.entity.Role;
 import com.banking.banking_app_apis.entity.User;
 import com.banking.banking_app_apis.repository.UserRepository;
 import com.banking.banking_app_apis.utils.AccountUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -21,6 +27,15 @@ public class UserServiceImpl implements UserService{
 
     @Autowired
     TransactionService transactionService;
+
+    @Autowired
+    PasswordEncoder passwordEncoder;
+
+    @Autowired
+    AuthenticationManager authenticationManager;
+
+    @Autowired
+    JwtTokenProvider jwtTokenProvider;
 
     /**
      * Creating an account - saving a new user into the db
@@ -47,9 +62,11 @@ public class UserServiceImpl implements UserService{
                 .accountNumber(AccountUtils.generateAccountNumber())
                 .accountBalance(BigDecimal.ZERO)
                 .email(userRequest.getEmail())
+                .password(passwordEncoder.encode(userRequest.getPassword()))
                 .phoneNumber(userRequest.getPhoneNumber())
                 .alternativePhoneNumber(userRequest.getAlternativePhoneNumber())
                 .status("ACTIVE")
+                .role(Role.valueOf("ROLE_ADMIN"))
                 .build();
 
         User savedUser = userRepository.save(newUser);
@@ -79,6 +96,29 @@ public class UserServiceImpl implements UserService{
                         .accountNumber(savedUser.getAccountNumber())
                         .accountName(fullName)
                         .build())
+                .build();
+    }
+
+
+    public BankResponse login(LoginDto loginDto) {
+        Authentication authentication = null;
+        authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(loginDto.getEmail(), loginDto.getPassword())
+        );
+
+        // Send Login Email
+        EmailDetails loginAlert = EmailDetails.builder()
+                .subject("You're logged in!")
+                .recipient(loginDto.getEmail())
+                .messageBody("You logged into your account. If you did not initiate this request, please contact your" +
+                        " bank!")
+                .build();
+
+        emailService.sendEmailAlert(loginAlert);
+
+        return BankResponse.builder()
+                .responseCode("Login Success")
+                .responseMessage(jwtTokenProvider.generateToken(authentication))
                 .build();
     }
 
