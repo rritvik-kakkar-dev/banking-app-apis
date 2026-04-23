@@ -233,12 +233,6 @@ Swagger UI provides interactive documentation for all endpoints.
 
 ---
 
-## 📄 License
-
-This project is licensed under the **MIT License**.
-
----
-
 ## 📬 Contact
 
 **Rritvik Kakkar**  
