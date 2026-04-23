@@ -1,12 +1,15 @@
 package com.banking.banking_app_apis.controller;
 
 import com.banking.banking_app_apis.dto.*;
+import com.banking.banking_app_apis.exception.ResourceNotFoundException;
 import com.banking.banking_app_apis.service.impl.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/user")
@@ -57,6 +60,9 @@ public class UserController {
             description = "Http Status 200 SUCCESS"
     )
     public String nameEnquiry(@RequestBody EnquiryRequest enquiryRequest) {
+        if (!Objects.equals(enquiryRequest.getAccountNumber(), "2026470375")) { // Simulate resource not found for IDs other than 1
+            throw new ResourceNotFoundException("Resource with ID " + enquiryRequest.getAccountNumber() + " not found");
+        }
         return userService.nameEnquiry(enquiryRequest);
     }
 
