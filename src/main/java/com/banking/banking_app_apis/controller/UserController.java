@@ -60,9 +60,6 @@ public class UserController {
             description = "Http Status 200 SUCCESS"
     )
     public String nameEnquiry(@RequestBody EnquiryRequest enquiryRequest) {
-        if (!Objects.equals(enquiryRequest.getAccountNumber(), "2026470375")) { // Simulate resource not found for IDs other than 1
-            throw new ResourceNotFoundException("Resource with ID " + enquiryRequest.getAccountNumber() + " not found");
-        }
         return userService.nameEnquiry(enquiryRequest);
     }
 
