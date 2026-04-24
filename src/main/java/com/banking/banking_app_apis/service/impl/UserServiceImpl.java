@@ -4,6 +4,9 @@ import com.banking.banking_app_apis.config.JwtTokenProvider;
 import com.banking.banking_app_apis.dto.*;
 import com.banking.banking_app_apis.entity.Role;
 import com.banking.banking_app_apis.entity.User;
+import com.banking.banking_app_apis.exception.DuplicateAccountException;
+import com.banking.banking_app_apis.exception.InsufficientBalanceException;
+import com.banking.banking_app_apis.exception.ResourceNotFoundException;
 import com.banking.banking_app_apis.repository.UserRepository;
 import com.banking.banking_app_apis.utils.AccountUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,11 +48,8 @@ public class UserServiceImpl implements UserService{
     public BankResponse createAccount(UserRequest userRequest) {
 
         if(userRepository.existsByEmail(userRequest.getEmail())) {
-            return BankResponse.builder()
-                    .responseCode(AccountUtils.ACCOUNT_EXISTS_CODE)
-                    .responseMessage(AccountUtils.ACCOUNT_EXISTS_MESSAGE)
-                    .accountInfo(null)
-                    .build();
+            throw new DuplicateAccountException("Account with this email already exists: "
+                    + userRequest.getEmail());
         }
 
         User newUser = User.builder()
@@ -135,11 +135,8 @@ public class UserServiceImpl implements UserService{
         // Check if the provided account number exists in the DB
         boolean isAccountExists = userRepository.existsByAccountNumber(enquiryRequest.getAccountNumber());
         if(!isAccountExists) {
-            return BankResponse.builder()
-                    .responseCode(AccountUtils.ACCOUNT_NOT_EXISTS_CODE)
-                    .responseMessage(AccountUtils.ACCOUNT_NOT_EXISTS_MESSAGE)
-                    .accountInfo(null)
-                    .build();
+            throw new ResourceNotFoundException("Account not found with account number: "
+                    + enquiryRequest.getAccountNumber());
         }
 
         User foundUser = userRepository.findByAccountNumber(enquiryRequest.getAccountNumber());
@@ -164,7 +161,8 @@ public class UserServiceImpl implements UserService{
         // Check if the provided account number exists in the DB
         boolean isAccountExists = userRepository.existsByAccountNumber(enquiryRequest.getAccountNumber());
         if(!isAccountExists) {
-            return AccountUtils.ACCOUNT_FOUND_MESSAGE;
+            throw new ResourceNotFoundException("Account not found with account number: "
+                    + enquiryRequest.getAccountNumber());
         }
 
         User foundUser = userRepository.findByAccountNumber(enquiryRequest.getAccountNumber());
@@ -179,11 +177,8 @@ public class UserServiceImpl implements UserService{
         // Check if the provided account number exists in the DB
         boolean isAccountExists = userRepository.existsByAccountNumber(creditDebitRequest.getAccountNumber());
         if(!isAccountExists) {
-            return BankResponse.builder()
-                    .responseCode(AccountUtils.ACCOUNT_NOT_EXISTS_CODE)
-                    .responseMessage(AccountUtils.ACCOUNT_NOT_EXISTS_MESSAGE)
-                    .accountInfo(null)
-                    .build();
+            throw new ResourceNotFoundException("Account not found with account number: "
+                    + creditDebitRequest.getAccountNumber());
         }
 
         User userToCredit = userRepository.findByAccountNumber(creditDebitRequest.getAccountNumber());
@@ -220,11 +215,8 @@ public class UserServiceImpl implements UserService{
         // Check if the provided account number exists in the DB
         boolean isAccountExists = userRepository.existsByAccountNumber(creditDebitRequest.getAccountNumber());
         if(!isAccountExists) {
-            return BankResponse.builder()
-                    .responseCode(AccountUtils.ACCOUNT_NOT_EXISTS_CODE)
-                    .responseMessage(AccountUtils.ACCOUNT_NOT_EXISTS_MESSAGE)
-                    .accountInfo(null)
-                    .build();
+            throw new ResourceNotFoundException("Account not found with account number: "
+                    + creditDebitRequest.getAccountNumber());
         }
 
         // Check if amount you intent to withdraw is not more than the current account balance
@@ -235,11 +227,8 @@ public class UserServiceImpl implements UserService{
         BigInteger debitAmount = creditDebitRequest.getAmount().toBigInteger();
 
         if(availableBalance.intValue() < debitAmount.intValue()) {
-            return BankResponse.builder()
-                    .responseCode(AccountUtils.INSUFFICIENT_BALANCE_CODE)
-                    .responseMessage(AccountUtils.INSUFFICIENT_BALANCE_MESSAGE)
-                    .accountInfo(null)
-                    .build();
+            throw new InsufficientBalanceException("Insufficient Balance: "
+                    + creditDebitRequest.getAmount());
         }
 
         userToDebit.setAccountBalance(currentBalance.subtract(creditDebitRequest.getAmount()));
@@ -275,11 +264,8 @@ public class UserServiceImpl implements UserService{
         // Get the account to debit (Check destination account exists)
         boolean isDestinationAccountExists = userRepository.existsByAccountNumber(transferRequest.getDestinationAccountNumber());
         if(!isDestinationAccountExists) {
-            return BankResponse.builder()
-                    .responseCode(AccountUtils.ACCOUNT_NOT_EXISTS_CODE)
-                    .responseMessage(AccountUtils.ACCOUNT_NOT_EXISTS_MESSAGE)
-                    .accountInfo(null)
-                    .build();
+            throw new ResourceNotFoundException("Account not found with account number: "
+                    + transferRequest.getDestinationAccountNumber());
         }
 
         // Check if the amount debited is not more than the current balance
@@ -290,11 +276,8 @@ public class UserServiceImpl implements UserService{
                     + (sourceAccount.getOtherName() != null ? " " + sourceAccount.getOtherName() : "");
 
         if(transferRequest.getAmount().compareTo(sourceAccount.getAccountBalance()) > 0) {
-            return BankResponse.builder()
-                    .responseCode(AccountUtils.INSUFFICIENT_BALANCE_CODE)
-                    .responseMessage(AccountUtils.INSUFFICIENT_BALANCE_MESSAGE)
-                    .accountInfo(null)
-                    .build();
+            throw new InsufficientBalanceException("Insufficient Balance: "
+                    + transferRequest.getAmount());
         }
 
         // Debit amount
