@@ -1,6 +1,7 @@
 package com.banking.banking_app_apis.service.impl;
 
 import com.banking.banking_app_apis.dto.EmailDetails;
+import com.banking.banking_app_apis.dto.TransactionDto;
 import com.banking.banking_app_apis.entity.Transaction;
 import com.banking.banking_app_apis.entity.User;
 import com.banking.banking_app_apis.repository.TransactionRepository;
@@ -11,6 +12,10 @@ import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
 import java.io.FileNotFoundException;
@@ -30,7 +35,7 @@ public class BankStatement {
     private UserRepository userRepository;
     private EmailService emailService;
 
-    private static final String FILE = "/Users/yomama/Documents/Spring Boot/Banking App Pdfs/MyStatement.pdf";
+    private static final String FILE = "/Users/yomama/Documents/Development/Spring Boot/Banking App Pdfs/MyStatement.pdf";
 
     /**
      * 1. retrieve list of transactions within a date range given an account number
@@ -38,7 +43,15 @@ public class BankStatement {
      * 3. send the file via email
      */
 
-    public List<Transaction> generateStatement(String accountNumber, String startDate, String endDate) throws FileNotFoundException, DocumentException {
+    public Page<TransactionDto> generateStatement(
+            String accountNumber,
+            String startDate,
+            String endDate,
+            int page,
+            int size,
+            String sortBy,
+            String direction
+    ) throws FileNotFoundException, DocumentException {
         LocalDate start = LocalDate.parse(startDate, DateTimeFormatter.ISO_DATE);
         LocalDate end = LocalDate.parse(endDate, DateTimeFormatter.ISO_DATE);
 
@@ -47,13 +60,30 @@ public class BankStatement {
                 + userAccount.getLastName()
                 + (userAccount.getOtherName() != null ? " " + userAccount.getOtherName() : "");
 
-        List<Transaction> transactionList = transactionRepository.findAll().stream()
-                .filter(t -> t.getAccountNumber().equals(accountNumber))
-                .filter(t -> !t.getCreatedAt().isBefore(start))     // >= startDate
-                .filter(t -> !t.getCreatedAt().isAfter(end))        // <= endDate
-                .sorted(Comparator.comparing(Transaction::getCreatedAt))
-                .toList();
+        // Old way without paagination and sorting
+//        List<Transaction> transactionList = transactionRepository.findAll().stream()
+//                .filter(t -> t.getAccountNumber().equals(accountNumber))
+//                .filter(t -> !t.getCreatedAt().isBefore(start))     // >= startDate
+//                .filter(t -> !t.getCreatedAt().isAfter(end))        // <= endDate
+//                .sorted(Comparator.comparing(Transaction::getCreatedAt))
+//                .toList();
 
+        //New Way with pagination and sorting
+        Sort sort = direction.equalsIgnoreCase("DESC")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        // For API response — paginated
+        Page<Transaction> transactionPage = transactionRepository
+                .findByAccountNumberAndCreatedAtBetween(accountNumber, start, end, pageable);
+
+        //  For PDF — fetch all, no pagination
+        List<Transaction> allForPdf = transactionRepository
+                .findByAccountNumberAndCreatedAtBetween(accountNumber, start, end,
+                        Pageable.unpaged())
+                .getContent();
 
         Rectangle statementSize = new Rectangle(PageSize.A4);
         Document document = new Document(statementSize);
@@ -131,7 +161,7 @@ public class BankStatement {
         transactionsTable.addCell(transactionAmount);
         transactionsTable.addCell(transactionStatus);
 
-        transactionList.forEach(transaction -> {
+        allForPdf.forEach(transaction -> {
             transactionsTable.addCell(new Phrase(transaction.getCreatedAt().toString()));
             transactionsTable.addCell(new Phrase(transaction.getTransactionType()));
             transactionsTable.addCell(new Phrase(transaction.getAmount().toString()));
@@ -157,6 +187,15 @@ public class BankStatement {
         emailService.sendEMailWithAttachment(emailDetails);
 
 
-        return transactionList;
+//        return transactionList;
+        Page<TransactionDto> result = transactionPage.map(t -> TransactionDto.builder()
+                .transactionType(t.getTransactionType())
+                .amount(t.getAmount())
+                .accountNumber(t.getAccountNumber())
+                .status(t.getStatus())
+                .createdAt(t.getCreatedAt())
+                .build());
+
+        return result;
     }
 }

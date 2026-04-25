@@ -1,7 +1,19 @@
 package com.banking.banking_app_apis.repository;
 
 import com.banking.banking_app_apis.entity.Transaction;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.PagingAndSortingRepository;
 
-public interface TransactionRepository extends JpaRepository<Transaction, String> {
+import java.time.LocalDate;
+
+public interface TransactionRepository extends JpaRepository<Transaction, String>, PagingAndSortingRepository<Transaction, String> {
+
+    Page<Transaction> findByAccountNumberAndCreatedAtBetween(
+            String accountNumber,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable
+    );
 }
