@@ -44,6 +44,8 @@ public class User implements UserDetails {
     private BigDecimal accountBalance;
 
     private String status;
+
+    @Enumerated(EnumType.STRING)
     private Role role;
 
     @CreationTimestamp

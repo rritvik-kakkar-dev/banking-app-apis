@@ -66,7 +66,7 @@ public class UserServiceImpl implements UserService{
                 .phoneNumber(userRequest.getPhoneNumber())
                 .alternativePhoneNumber(userRequest.getAlternativePhoneNumber())
                 .status("ACTIVE")
-                .role(Role.valueOf("ROLE_ADMIN"))
+                .role(Role.ROLE_USER)
                 .build();
 
         User savedUser = userRepository.save(newUser);
