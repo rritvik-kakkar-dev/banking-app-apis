@@ -39,8 +39,6 @@ public class UserController {
     // Swagger
     @Operation(summary = "Balance Enquiry", description = "Given an account number, check how much amount the user has")
     @ApiResponse(responseCode = "200", description = "Http Status 200 SUCCESS")
-    //RBAC
-    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
     public BankResponse balanceEnquiry(@RequestBody EnquiryRequest enquiryRequest) {
         return userService.balanceEnquiry(enquiryRequest);
     }

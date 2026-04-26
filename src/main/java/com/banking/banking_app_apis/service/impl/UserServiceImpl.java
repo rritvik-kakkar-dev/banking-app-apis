@@ -261,11 +261,16 @@ public class UserServiceImpl implements UserService{
     @Override
     public BankResponse transfer(TransferRequest transferRequest) {
 
-        // Get the account to debit (Check destination account exists)
+        // Get the account to debit (Check source account exists)
+        boolean isSourceAccountExists = userRepository.existsByAccountNumber(transferRequest.getSourceAccountNumber());
+        if (!isSourceAccountExists) {
+            throw new ResourceNotFoundException("Account not found with account number: " + transferRequest.getSourceAccountNumber());
+        }
+
+        // Get the account to credit (Check destination account exists)
         boolean isDestinationAccountExists = userRepository.existsByAccountNumber(transferRequest.getDestinationAccountNumber());
         if(!isDestinationAccountExists) {
-            throw new ResourceNotFoundException("Account not found with account number: "
-                    + transferRequest.getDestinationAccountNumber());
+            throw new ResourceNotFoundException("Account not found with account number: " + transferRequest.getDestinationAccountNumber());
         }
 
         // Check if the amount debited is not more than the current balance
