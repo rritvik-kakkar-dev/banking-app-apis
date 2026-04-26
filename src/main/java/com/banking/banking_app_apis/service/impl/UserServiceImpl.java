@@ -17,7 +17,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class UserServiceImpl implements UserService{
@@ -72,9 +74,7 @@ public class UserServiceImpl implements UserService{
         User savedUser = userRepository.save(newUser);
 
         // Send email alert
-        String fullName = savedUser.getFirstName() + " "
-                + savedUser.getLastName()
-                + (savedUser.getOtherName() != null ? " " + savedUser.getOtherName() : "");
+        String fullName = buildFullName(savedUser);
 
         EmailDetails emailDetails = EmailDetails.builder()
                 .recipient(savedUser.getEmail())
@@ -101,8 +101,7 @@ public class UserServiceImpl implements UserService{
 
 
     public BankResponse login(LoginDto loginDto) {
-        Authentication authentication = null;
-        authentication = authenticationManager.authenticate(
+        Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(loginDto.getEmail(), loginDto.getPassword())
         );
 
@@ -141,9 +140,7 @@ public class UserServiceImpl implements UserService{
 
         User foundUser = userRepository.findByAccountNumber(enquiryRequest.getAccountNumber());
 
-        String fullName = foundUser.getFirstName() + " "
-                + foundUser.getLastName()
-                + (foundUser.getOtherName() != null ? " " + foundUser.getOtherName() : "");
+        String fullName = buildFullName(foundUser);
 
         return BankResponse.builder()
                 .responseCode(AccountUtils.ACCOUNT_FOUND_CODE)
@@ -167,9 +164,7 @@ public class UserServiceImpl implements UserService{
 
         User foundUser = userRepository.findByAccountNumber(enquiryRequest.getAccountNumber());
 
-        return foundUser.getFirstName() + " "
-                + foundUser.getLastName()
-                + (foundUser.getOtherName() != null ? " " + foundUser.getOtherName() : "");
+        return buildFullName(foundUser);
     }
 
     @Override
@@ -187,17 +182,9 @@ public class UserServiceImpl implements UserService{
         userRepository.save(userToCredit);
 
         // Save Transaction
-        TransactionDto transactionDto = TransactionDto.builder()
-                .accountNumber(userToCredit.getAccountNumber())
-                .transactionType("CREDIT")
-                .amount(creditDebitRequest.getAmount())
-                .build();
+        transactionService.saveTransaction(buildTransactionDto(userToCredit.getAccountNumber(), "CREDIT", creditDebitRequest.getAmount()));
 
-        transactionService.saveTransaction(transactionDto);
-
-        String fullName = userToCredit.getFirstName() + " "
-                + userToCredit.getLastName()
-                + (userToCredit.getOtherName() != null ? " " + userToCredit.getOtherName() : "");
+        String fullName = buildFullName(userToCredit);
 
         return BankResponse.builder()
                 .responseCode(AccountUtils.ACCOUNT_CREDITED_SUCCESS_CODE)
@@ -223,10 +210,7 @@ public class UserServiceImpl implements UserService{
         User userToDebit = userRepository.findByAccountNumber(creditDebitRequest.getAccountNumber());
         BigDecimal currentBalance = userToDebit.getAccountBalance();
 
-        BigInteger availableBalance = userToDebit.getAccountBalance().toBigInteger();
-        BigInteger debitAmount = creditDebitRequest.getAmount().toBigInteger();
-
-        if(availableBalance.intValue() < debitAmount.intValue()) {
+        if (creditDebitRequest.getAmount().compareTo(userToDebit.getAccountBalance()) > 0) {
             throw new InsufficientBalanceException("Insufficient Balance: "
                     + creditDebitRequest.getAmount());
         }
@@ -235,17 +219,10 @@ public class UserServiceImpl implements UserService{
         userRepository.save(userToDebit);
 
         // Save Transaction
-        TransactionDto transactionDto = TransactionDto.builder()
-                .accountNumber(userToDebit.getAccountNumber())
-                .transactionType("DEBIT")
-                .amount(creditDebitRequest.getAmount())
-                .build();
+        transactionService.saveTransaction(buildTransactionDto(userToDebit.getAccountNumber(), "DEBIT", creditDebitRequest.getAmount()));
 
-        transactionService.saveTransaction(transactionDto);
 
-        String fullName = userToDebit.getFirstName() + " "
-                + userToDebit.getLastName()
-                + (userToDebit.getOtherName() != null ? " " + userToDebit.getOtherName() : "");
+        String fullName = buildFullName(userToDebit);
 
         return BankResponse.builder()
                 .responseCode(AccountUtils.ACCOUNT_DEBITED_SUCCESS_CODE)
@@ -276,10 +253,6 @@ public class UserServiceImpl implements UserService{
         // Check if the amount debited is not more than the current balance
         User sourceAccount = userRepository.findByAccountNumber(transferRequest.getSourceAccountNumber());
 
-        String sourceAccountUserFullName = sourceAccount.getFirstName() + " "
-                + sourceAccount.getLastName()
-                    + (sourceAccount.getOtherName() != null ? " " + sourceAccount.getOtherName() : "");
-
         if(transferRequest.getAmount().compareTo(sourceAccount.getAccountBalance()) > 0) {
             throw new InsufficientBalanceException("Insufficient Balance: "
                     + transferRequest.getAmount());
@@ -291,13 +264,7 @@ public class UserServiceImpl implements UserService{
         userRepository.save(sourceAccount);
 
         // Save Transaction
-        TransactionDto DebitransactionDto = TransactionDto.builder()
-                .accountNumber(sourceAccount.getAccountNumber())
-                .transactionType("DEBIT")
-                .amount(transferRequest.getAmount())
-                .build();
-
-        transactionService.saveTransaction(DebitransactionDto);
+        transactionService.saveTransaction(buildTransactionDto(sourceAccount.getAccountNumber(), "DEBIT", transferRequest.getAmount()));
 
         // Send Debit Amount Email Alert
 //        EmailDetails debitAlert = EmailDetails.builder()
@@ -317,13 +284,8 @@ public class UserServiceImpl implements UserService{
         userRepository.save(destinationAccount);
 
         // Save Transaction
-        TransactionDto creditTransactionDto = TransactionDto.builder()
-                .accountNumber(destinationAccount.getAccountNumber())
-                .transactionType("CREDIT")
-                .amount(transferRequest.getAmount())
-                .build();
 
-        transactionService.saveTransaction(creditTransactionDto);
+        transactionService.saveTransaction(buildTransactionDto(destinationAccount.getAccountNumber(), "CREDIT", transferRequest.getAmount()));
 
         // Send Credit Amount Email Alert
 //        EmailDetails creditAlert = EmailDetails.builder()
@@ -340,5 +302,20 @@ public class UserServiceImpl implements UserService{
                 .accountInfo(null)
                 .build();
 
+    }
+
+    private String buildFullName(User user) {
+        return Stream.of(user.getFirstName(), user.getLastName(), user.getOtherName())
+                .filter(Objects::nonNull)
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.joining(" "));
+    }
+
+    private TransactionDto buildTransactionDto(String accountNumber, String type, BigDecimal amount) {
+        return TransactionDto.builder()
+                .accountNumber(accountNumber)
+                .transactionType(type)
+                .amount(amount)
+                .build();
     }
 }
