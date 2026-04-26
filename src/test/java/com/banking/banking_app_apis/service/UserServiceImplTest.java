@@ -1,4 +1,4 @@
-package com.banking.banking_app_apis.service.impl;
+package com.banking.banking_app_apis.service;
 
 import com.banking.banking_app_apis.dto.*;
 import com.banking.banking_app_apis.entity.Role;
@@ -7,6 +7,7 @@ import com.banking.banking_app_apis.exception.DuplicateAccountException;
 import com.banking.banking_app_apis.exception.InsufficientBalanceException;
 import com.banking.banking_app_apis.exception.ResourceNotFoundException;
 import com.banking.banking_app_apis.repository.UserRepository;
+import com.banking.banking_app_apis.service.impl.UserServiceImpl;
 import com.banking.banking_app_apis.utils.AccountUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -1,7 +1,6 @@
 package com.banking.banking_app_apis.controller;
 
 import com.banking.banking_app_apis.dto.TransactionDto;
-import com.banking.banking_app_apis.entity.Transaction;
 import com.banking.banking_app_apis.service.impl.BankStatement;
 import com.itextpdf.text.DocumentException;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,7 +12,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.FileNotFoundException;
-import java.util.List;
 
 @RestController
 @RequestMapping("/bankStatement")

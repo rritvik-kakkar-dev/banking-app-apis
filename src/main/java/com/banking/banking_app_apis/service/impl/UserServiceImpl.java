@@ -8,6 +8,9 @@ import com.banking.banking_app_apis.exception.DuplicateAccountException;
 import com.banking.banking_app_apis.exception.InsufficientBalanceException;
 import com.banking.banking_app_apis.exception.ResourceNotFoundException;
 import com.banking.banking_app_apis.repository.UserRepository;
+import com.banking.banking_app_apis.service.EmailService;
+import com.banking.banking_app_apis.service.TransactionService;
+import com.banking.banking_app_apis.service.UserService;
 import com.banking.banking_app_apis.utils.AccountUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -22,7 +25,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Service
-public class UserServiceImpl implements UserService{
+public class UserServiceImpl implements UserService {
 
     @Autowired
     UserRepository userRepository;

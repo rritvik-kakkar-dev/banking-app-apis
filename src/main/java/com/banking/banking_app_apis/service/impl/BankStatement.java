@@ -6,6 +6,7 @@ import com.banking.banking_app_apis.entity.Transaction;
 import com.banking.banking_app_apis.entity.User;
 import com.banking.banking_app_apis.repository.TransactionRepository;
 import com.banking.banking_app_apis.repository.UserRepository;
+import com.banking.banking_app_apis.service.EmailService;
 import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfPTable;
@@ -23,7 +24,6 @@ import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
 import java.util.List;
 
 @Component

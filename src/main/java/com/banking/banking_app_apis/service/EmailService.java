@@ -1,4 +1,4 @@
-package com.banking.banking_app_apis.service.impl;
+package com.banking.banking_app_apis.service;
 
 import com.banking.banking_app_apis.dto.EmailDetails;
 

@@ -1,6 +1,7 @@
 package com.banking.banking_app_apis.service.impl;
 
 import com.banking.banking_app_apis.dto.EmailDetails;
+import com.banking.banking_app_apis.service.EmailService;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +19,7 @@ import java.util.Objects;
 
 @Service
 @Slf4j
-public class EmailServiceImpl implements EmailService{
+public class EmailServiceImpl implements EmailService {
 
     @Autowired
     private JavaMailSender javaMailSender;
