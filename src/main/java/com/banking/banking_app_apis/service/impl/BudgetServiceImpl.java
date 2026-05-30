@@ -7,11 +7,14 @@ import com.banking.banking_app_apis.exception.ValidationException;
 import com.banking.banking_app_apis.repository.*;
 import com.banking.banking_app_apis.service.BudgetService;
 import com.banking.banking_app_apis.service.EmailService;
+import com.banking.banking_app_apis.service.TransactionService;
 import com.banking.banking_app_apis.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -38,6 +41,9 @@ public class BudgetServiceImpl implements BudgetService {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private TransactionService transactionService;
 
 
     @Override
@@ -80,9 +86,11 @@ public class BudgetServiceImpl implements BudgetService {
     @Override
     public Budget createBudget(BudgetRequest request, User currentUser) {
 
-        BudgetGroup group = budgetGroupRepository.findById(request.getBudgetGroupId()).orElseThrow(() -> new ResourceNotFoundException("No Budget group found with this ID: " + request.getBudgetGroupId()));
+        BudgetGroup group = budgetGroupRepository.findById(request.getBudgetGroupId())
+                .orElseThrow(() -> new ResourceNotFoundException("No Budget group found with this ID: " + request.getBudgetGroupId()));
 
-        Category category = categoryRepository.findById(request.getCategoryId()).orElseThrow(() -> new ResourceNotFoundException("No Category found with this ID: " + request.getCategoryId()));
+        Category category = categoryRepository.findById(request.getCategoryId())
+                .orElseThrow(() -> new ResourceNotFoundException("No Category found with this ID: " + request.getCategoryId()));
 
         boolean isLinkedAccountUserExists = userRepository.existsByAccountNumber(request.getLinkedAccountNumber());
         if(!isLinkedAccountUserExists) {
@@ -134,7 +142,28 @@ public class BudgetServiceImpl implements BudgetService {
 
     @Override
     public Expense logExpense(ExpenseRequest request, User currentUser) {
-        return null;
+        Budget budget = budgetRepository.findById(request.getBudgetId())
+                .orElseThrow(() -> new ResourceNotFoundException("Budget not found: " + request.getBudgetId()));
+
+        CreditDebitRequest debitRequest = CreditDebitRequest.builder()
+                .accountNumber(budget.getLinkedAccount().getAccountNumber())
+                .amount(request.getAmount())
+                .build();
+
+        BankResponse debitResponse = userService.debitAmount(debitRequest);
+
+        Expense expense = Expense.builder()
+                .budget(budget)
+                .loggedBy(currentUser)
+                .amount(request.getAmount())
+                .description(request.getDescription())
+                .date(request.getDate())
+                .transactionId(debitResponse.getTransactionId())
+                .build();
+
+        Expense savedExpense = expenseRepository.save(expense);
+        checkBudgetAlerts(budget, currentUser);
+        return savedExpense;
     }
 
     @Override
@@ -168,5 +197,50 @@ public class BudgetServiceImpl implements BudgetService {
                 .build();
 
         return categoryRepository.save(category);
+    }
+
+    private void checkBudgetAlert() {
+
+    }
+
+    private TransactionDto buildTransactionDto(String accountNumber, String type, BigDecimal amount) {
+        return TransactionDto.builder()
+                .accountNumber(accountNumber)
+                .transactionType(type)
+                .amount(amount)
+                .build();
+    }
+
+
+    private void checkBudgetAlerts(Budget budget, User currentUser) {
+        List<Expense> expenses = expenseRepository.findByBudgetAndDateBetween(budget, budget.getStartDate(),
+                budget.getEndDate());
+
+        BigDecimal totalSpent = expenses.stream().map(Expense::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        double percentUsed = totalSpent
+                .divide(budget.getLimitAmount(), 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .doubleValue();
+        
+        if(percentUsed >= 100) {
+             // Send Budget Exceeded email alert
+            EmailDetails budgetExceededAlert = EmailDetails.builder()
+                    .subject("BUDGET EXCEEDED")
+                    .recipient(currentUser.getEmail())
+                    .messageBody("You have exceeded you budget for " + budget.getCategory().getName() +" category!")
+                    .build();
+
+            emailService.sendEmailAlert(budgetExceededAlert);
+        } else if (percentUsed >= 80 && budget.isAlertAt80Percent()) {
+            // Send 80% budget used email alert
+            EmailDetails budget80PercentUsedAlert = EmailDetails.builder()
+                    .subject("BUDGET 80% USED")
+                    .recipient(currentUser.getEmail())
+                    .messageBody("You have 80% of your budget for " + budget.getCategory().getName() +" category!")
+                    .build();
+
+            emailService.sendEmailAlert(budget80PercentUsedAlert);
+        }
     }
 }

@@ -40,6 +40,7 @@ public class User implements UserDetails {
     private String phoneNumber;
     private String alternativePhoneNumber;
 
+    @Column(unique = true)
     private String accountNumber;
     private BigDecimal accountBalance;
 

@@ -5,5 +5,5 @@ import com.banking.banking_app_apis.entity.Transaction;
 
 public interface TransactionService {
 
-    void saveTransaction(TransactionDto transactionDto);
+    Transaction saveTransaction(TransactionDto transactionDto);
 }

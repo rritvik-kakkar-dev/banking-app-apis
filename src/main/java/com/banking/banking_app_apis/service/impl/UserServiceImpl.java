@@ -3,6 +3,7 @@ package com.banking.banking_app_apis.service.impl;
 import com.banking.banking_app_apis.config.JwtTokenProvider;
 import com.banking.banking_app_apis.dto.*;
 import com.banking.banking_app_apis.entity.Role;
+import com.banking.banking_app_apis.entity.Transaction;
 import com.banking.banking_app_apis.entity.User;
 import com.banking.banking_app_apis.exception.DuplicateAccountException;
 import com.banking.banking_app_apis.exception.InsufficientBalanceException;
@@ -108,6 +109,9 @@ public class UserServiceImpl implements UserService {
                 new UsernamePasswordAuthenticationToken(loginDto.getEmail(), loginDto.getPassword())
         );
 
+        User user = userRepository.findByEmail(loginDto.getEmail()).get();
+        String fullName = buildFullName(user);
+
         // Send Login Email
         EmailDetails loginAlert = EmailDetails.builder()
                 .subject("You're logged in!")
@@ -121,6 +125,11 @@ public class UserServiceImpl implements UserService {
         return BankResponse.builder()
                 .responseCode("Login Success")
                 .responseMessage(jwtTokenProvider.generateToken(authentication))
+                .accountInfo(AccountInfo.builder()
+                        .accountNumber(user.getAccountNumber())
+                        .accountName(fullName)
+                        .accountBalance(user.getAccountBalance())
+                        .build())
                 .build();
     }
 
@@ -222,7 +231,9 @@ public class UserServiceImpl implements UserService {
         userRepository.save(userToDebit);
 
         // Save Transaction
-        transactionService.saveTransaction(buildTransactionDto(userToDebit.getAccountNumber(), "DEBIT", creditDebitRequest.getAmount()));
+        Transaction savedTransaction = transactionService.saveTransaction(
+                buildTransactionDto(userToDebit.getAccountNumber(), "DEBIT", creditDebitRequest.getAmount())
+        );
 
 
         String fullName = buildFullName(userToDebit);
@@ -230,6 +241,7 @@ public class UserServiceImpl implements UserService {
         return BankResponse.builder()
                 .responseCode(AccountUtils.ACCOUNT_DEBITED_SUCCESS_CODE)
                 .responseMessage(AccountUtils.ACCOUNT_DEBITED_SUCCESS_MESSAGE)
+                .transactionId(savedTransaction.getTransactionId())
                 .accountInfo(AccountInfo.builder()
                         .accountBalance(userToDebit.getAccountBalance())
                         .accountNumber(creditDebitRequest.getAccountNumber())

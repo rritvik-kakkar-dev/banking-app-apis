@@ -14,7 +14,7 @@ public class TransactionServiceImpl implements TransactionService {
     TransactionRepository transactionRepository;
 
     @Override
-    public void saveTransaction(TransactionDto transactionDto) {
+    public Transaction saveTransaction(TransactionDto transactionDto) {
         Transaction transaction = Transaction.builder()
                 .transactionType(transactionDto.getTransactionType())
                 .accountNumber(transactionDto.getAccountNumber())
@@ -22,7 +22,6 @@ public class TransactionServiceImpl implements TransactionService {
                 .status("SUCCESS")
                 .build();
 
-        transactionRepository.save(transaction);
-        System.out.println("Transaction saved successfully!");
+        return transactionRepository.save(transaction);
     }
 }

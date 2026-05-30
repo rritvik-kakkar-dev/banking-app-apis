@@ -14,4 +14,5 @@ public class BankResponse {
     private String responseCode;
     private String responseMessage;
     private AccountInfo accountInfo;
+    private String transactionId;
 }

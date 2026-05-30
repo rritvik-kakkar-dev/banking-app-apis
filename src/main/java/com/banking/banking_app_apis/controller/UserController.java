@@ -35,7 +35,9 @@ public class UserController {
     // Swagger
     @Operation(summary = "Balance Enquiry", description = "Given an account number, check how much amount the user has")
     @ApiResponse(responseCode = "200", description = "Http Status 200 SUCCESS")
-    public BankResponse balanceEnquiry(@RequestBody EnquiryRequest enquiryRequest) {
+    public BankResponse balanceEnquiry(@RequestParam String accountNumber) {
+        EnquiryRequest enquiryRequest = new EnquiryRequest();
+        enquiryRequest.setAccountNumber(accountNumber);
         return userService.balanceEnquiry(enquiryRequest);
     }
 
