@@ -29,7 +29,7 @@ function Login() {
 
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome to Volta</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome to Vaulta</h1>
                     <p className="text-gray-400 text-sm">Sign in to your account</p>
                 </div>
 

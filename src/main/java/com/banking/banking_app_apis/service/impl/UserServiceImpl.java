@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -181,6 +182,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public BankResponse creditAmount(CreditDebitRequest creditDebitRequest) {
+
+        String reference = UUID.randomUUID().toString();
+
         // Check if the provided account number exists in the DB
         boolean isAccountExists = userRepository.existsByAccountNumber(creditDebitRequest.getAccountNumber());
         if(!isAccountExists) {
@@ -194,7 +198,7 @@ public class UserServiceImpl implements UserService {
         userRepository.save(userToCredit);
 
         // Save Transaction
-        transactionService.saveTransaction(buildTransactionDto(userToCredit.getAccountNumber(), "CREDIT", creditDebitRequest.getAmount()));
+        transactionService.saveTransaction(buildTransactionDto(userToCredit.getAccountNumber(), "CREDIT", creditDebitRequest.getAmount(), reference));
 
         String fullName = buildFullName(userToCredit);
 
@@ -211,6 +215,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public BankResponse debitAmount(CreditDebitRequest creditDebitRequest) {
+
+        String reference = UUID.randomUUID().toString();
+
         // Check if the provided account number exists in the DB
         boolean isAccountExists = userRepository.existsByAccountNumber(creditDebitRequest.getAccountNumber());
         if(!isAccountExists) {
@@ -232,7 +239,7 @@ public class UserServiceImpl implements UserService {
 
         // Save Transaction
         Transaction savedTransaction = transactionService.saveTransaction(
-                buildTransactionDto(userToDebit.getAccountNumber(), "DEBIT", creditDebitRequest.getAmount())
+                buildTransactionDto(userToDebit.getAccountNumber(), "DEBIT", creditDebitRequest.getAmount(), reference)
         );
 
 
@@ -252,6 +259,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public BankResponse transfer(TransferRequest transferRequest) {
+
+        String reference = UUID.randomUUID().toString();
 
         // Get the account to debit (Check source account exists)
         boolean isSourceAccountExists = userRepository.existsByAccountNumber(transferRequest.getSourceAccountNumber());
@@ -279,7 +288,7 @@ public class UserServiceImpl implements UserService {
         userRepository.save(sourceAccount);
 
         // Save Transaction
-        transactionService.saveTransaction(buildTransactionDto(sourceAccount.getAccountNumber(), "DEBIT", transferRequest.getAmount()));
+        transactionService.saveTransaction(buildTransactionDto(sourceAccount.getAccountNumber(), "DEBIT", transferRequest.getAmount(), reference));
 
         // Send Debit Amount Email Alert
 //        EmailDetails debitAlert = EmailDetails.builder()
@@ -300,7 +309,7 @@ public class UserServiceImpl implements UserService {
 
         // Save Transaction
 
-        transactionService.saveTransaction(buildTransactionDto(destinationAccount.getAccountNumber(), "CREDIT", transferRequest.getAmount()));
+        transactionService.saveTransaction(buildTransactionDto(destinationAccount.getAccountNumber(), "CREDIT", transferRequest.getAmount(), reference));
 
         // Send Credit Amount Email Alert
 //        EmailDetails creditAlert = EmailDetails.builder()
@@ -326,8 +335,9 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.joining(" "));
     }
 
-    private TransactionDto buildTransactionDto(String accountNumber, String type, BigDecimal amount) {
+    private TransactionDto buildTransactionDto(String accountNumber, String type, BigDecimal amount, String reference) {
         return TransactionDto.builder()
+                .transactionReference(reference)
                 .accountNumber(accountNumber)
                 .transactionType(type)
                 .amount(amount)

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.PagingAndSortingRepository;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, String>, PagingAndSortingRepository<Transaction, String> {
 
@@ -16,4 +17,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, String
             LocalDate endDate,
             Pageable pageable
     );
+
+    Page<Transaction> findByAccountNumber(
+            String accountNumber,
+            Pageable pageable
+    );
+
+    List<Transaction> findByTransactionReference(String transactionReference);
 }

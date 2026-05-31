@@ -6,16 +6,18 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
 public class TransactionDto {
+    private String transactionReference;
     private String transactionType;
     private BigDecimal amount;
     private String accountNumber;
+    private String counterpartyAccountNumber;
     private String status;
-    private LocalDate createdAt;
+    private LocalDateTime createdAt;
 }

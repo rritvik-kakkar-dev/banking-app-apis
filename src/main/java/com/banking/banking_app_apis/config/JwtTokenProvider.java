@@ -3,16 +3,14 @@ package com.banking.banking_app_apis.config;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.SecurityException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
-import java.util.Date;
 import javax.crypto.SecretKey;
+import java.util.Date;
 
 @Component
 public class JwtTokenProvider {
@@ -53,15 +51,16 @@ public class JwtTokenProvider {
 
 
     public boolean validateToken(String token) {
-        try{
+        try {
             Jwts.parser()
                     .verifyWith(key())
                     .build()
-                    .parse(token);
-
+                    .parseSignedClaims(token);
             return true;
-        } catch (ExpiredJwtException | IllegalArgumentException | SecurityException | MalformedJwtException e) {
-            throw new RuntimeException(e);
+        } catch (ExpiredJwtException e) {
+            return false; // token expired — filter will not set authentication
+        } catch (Exception e) {
+            return false; // any other invalid token
         }
     }
 }

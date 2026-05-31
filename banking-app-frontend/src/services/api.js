@@ -17,4 +17,16 @@ api.interceptors.request.use(
     }
 );
 
+api.interceptors.response.use(
+    (response) => response, // pass through successful responses
+    (error) => {
+        if (error.response && error.response.status === 401) {
+            localStorage.clear();
+            alert("Session expired. Please login again.");
+            window.location.href = "/login";
+        }
+        return Promise.reject(error);
+    }
+);
+
 export default api;
