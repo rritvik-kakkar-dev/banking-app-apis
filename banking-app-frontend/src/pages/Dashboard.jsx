@@ -33,18 +33,23 @@ function Dashboard() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-900">
+        <div className="min-h-screen bg-[#f5f5f0]">
 
             {/* Navbar */}
-            <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex justify-between items-center">
-                <h1 className="text-white font-bold text-xl">🏦 Banking App</h1>
+            <nav className="bg-[#fefefe] border-b border-[#e8e8e3] px-6 py-4 flex justify-between items-center shadow-sm">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
+                        V
+                    </div>
+                    <h1 className="text-gray-900 font-bold text-lg">Volta</h1>
+                </div>
                 <div className="flex items-center gap-4">
-                    <span className="text-slate-300 text-sm">
+                    <span className="text-gray-400 text-sm">
                         {accountInfo ? accountInfo.accountName : ""}
                     </span>
                     <button
                         onClick={handleLogout}
-                        className="bg-red-600 hover:bg-red-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                        className="text-sm font-medium px-4 py-2 rounded-xl border border-red-100 text-red-400 hover:bg-red-50 transition-all"
                     >
                         Logout
                     </button>
@@ -55,53 +60,74 @@ function Dashboard() {
             <div className="max-w-4xl mx-auto px-6 py-8">
 
                 {error && (
-                    <div className="bg-red-900/50 border border-red-500 text-red-300 px-4 py-3 rounded-lg mb-6 text-sm">
+                    <div className="bg-red-50 border border-red-100 text-red-500 rounded-xl px-4 py-3 text-sm mb-6">
                         {error}
                     </div>
                 )}
 
                 {loading ? (
-                    <div className="text-slate-400 text-center mt-20">Loading...</div>
+                    <div className="flex flex-col items-center justify-center mt-32 gap-4">
+                        <svg className="animate-spin h-8 w-8 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                        </svg>
+                        <p className="text-gray-400 text-xs uppercase tracking-widest">Loading account...</p>
+                    </div>
                 ) : accountInfo ? (
                     <>
                         {/* Balance Card */}
-                        <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-2xl p-6 mb-6 shadow-xl">
-                            <p className="text-blue-200 text-sm mb-1">Total Balance</p>
-                            <h2 className="text-white text-4xl font-bold mb-4">
+                        <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-3xl p-6 mb-6 shadow-xl shadow-blue-200/40">
+                            <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider mb-3">
+                                Total Balance
+                            </p>
+                            <h2 className="text-white text-5xl font-bold tracking-tight mb-6">
                                 ₹{accountInfo.accountBalance.toLocaleString("en-IN")}
                             </h2>
                             <div className="flex justify-between">
                                 <div>
-                                    <p className="text-blue-200 text-xs">Account Number</p>
-                                    <p className="text-white text-sm font-medium">{accountInfo.accountNumber}</p>
+                                    <p className="text-blue-200 text-xs uppercase tracking-wider mb-1">
+                                        Account Number
+                                    </p>
+                                    <p className="text-white text-sm font-medium">
+                                        {accountInfo.accountNumber}
+                                    </p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-blue-200 text-xs">Account Holder</p>
-                                    <p className="text-white text-sm font-medium">{accountInfo.accountName}</p>
+                                    <p className="text-blue-200 text-xs uppercase tracking-wider mb-1">
+                                        Account Holder
+                                    </p>
+                                    <p className="text-white text-sm font-medium">
+                                        {accountInfo.accountName}
+                                    </p>
                                 </div>
                             </div>
                         </div>
 
                         {/* Quick Actions */}
+                        <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">
+                            Quick Actions
+                        </p>
                         <div className="grid grid-cols-3 gap-4 mb-6">
-                            <button className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl p-4 text-center transition-colors">
+                            <button className="bg-[#fefefe] hover:bg-[#f0f0eb] border border-[#e8e8e3] rounded-2xl p-4 text-center transition-all shadow-sm hover:shadow-md">
                                 <div className="text-2xl mb-2">💰</div>
-                                <p className="text-white text-sm font-medium">Credit</p>
+                                <p className="text-gray-700 text-sm font-medium">Credit</p>
                             </button>
-                            <button className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl p-4 text-center transition-colors">
+                            <button className="bg-[#fefefe] hover:bg-[#f0f0eb] border border-[#e8e8e3] rounded-2xl p-4 text-center transition-all shadow-sm hover:shadow-md">
                                 <div className="text-2xl mb-2">💸</div>
-                                <p className="text-white text-sm font-medium">Debit</p>
+                                <p className="text-gray-700 text-sm font-medium">Debit</p>
                             </button>
-                            <button className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl p-4 text-center transition-colors">
+                            <button className="bg-[#fefefe] hover:bg-[#f0f0eb] border border-[#e8e8e3] rounded-2xl p-4 text-center transition-all shadow-sm hover:shadow-md">
                                 <div className="text-2xl mb-2">🔄</div>
-                                <p className="text-white text-sm font-medium">Transfer</p>
+                                <p className="text-gray-700 text-sm font-medium">Transfer</p>
                             </button>
                         </div>
 
-                        {/* Recent Transactions placeholder */}
-                        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-                            <h3 className="text-white font-semibold mb-4">Recent Transactions</h3>
-                            <p className="text-slate-400 text-sm text-center py-8">
+                        {/* Recent Transactions */}
+                        <div className="bg-[#fefefe] border border-[#e8e8e3] rounded-2xl p-6 shadow-sm">
+                            <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-6">
+                                Recent Transactions
+                            </p>
+                            <p className="text-gray-300 text-sm text-center py-8">
                                 Transaction history coming soon
                             </p>
                         </div>
