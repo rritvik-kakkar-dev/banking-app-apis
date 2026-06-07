@@ -77,8 +77,13 @@ const TransactionHistoryList = ({
 
                                     <p className="text-sm text-gray-500">
                                         {transaction.transactionType === "DEBIT"
-                                            ? `To • ${transaction.counterpartyAccountNumber}`
-                                            : `From • ${transaction.counterpartyAccountNumber}`}
+                                            ? transaction.counterpartySource
+                                                ? `To • ${transaction.counterpartySource}`
+                                                : "Direct Debit"
+                                            : transaction.counterpartySource
+                                                ? `From • ${transaction.counterpartySource}`
+                                                : "Direct Credit"
+                                        }
                                     </p>
 
                                     <p className="text-xs text-gray-400 mt-1">

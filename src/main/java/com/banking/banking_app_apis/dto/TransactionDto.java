@@ -17,7 +17,7 @@ public class TransactionDto {
     private String transactionType;
     private BigDecimal amount;
     private String accountNumber;
-    private String counterpartyAccountNumber;
+    private String counterpartySource;
     private String status;
     private LocalDateTime createdAt;
 }

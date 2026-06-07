@@ -6,6 +6,7 @@ function CreditModal({ onClose, onSuccess }) {
     const [amount, setAmount] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [sourceAccount, setSourceAccount] = useState("");
 
     const accountNumber = localStorage.getItem("accountNumber");
 
@@ -19,7 +20,8 @@ function CreditModal({ onClose, onSuccess }) {
         try {
             await api.post("/api/user/credit", {
                 accountNumber,
-                amount: Number(amount)
+                amount: Number(amount),
+                source: sourceAccount || null
             });
 
             toast.success(
@@ -65,6 +67,20 @@ function CreditModal({ onClose, onSuccess }) {
                         placeholder="Enter amount"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
+                    />
+                </div>
+
+                {/* Optional From Description */}
+                <div className="mb-6">
+                    <label className="block text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2">
+                        Source <span className="text-gray-300 normal-case">(optional)</span>
+                    </label>
+                    <input
+                        type="text"
+                        className="w-full bg-[#f0f0eb] border border-[#e8e8e3] focus:border-blue-400 focus:ring-2 focus:ring-blue-100 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-300 outline-none transition-all text-sm"
+                        placeholder="e.g. Salary, Freelance, Gift"
+                        value={sourceAccount}
+                        onChange={(e) => setSourceAccount(e.target.value)}
                     />
                 </div>
 

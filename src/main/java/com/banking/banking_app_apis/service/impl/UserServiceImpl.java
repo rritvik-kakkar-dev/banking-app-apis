@@ -198,7 +198,8 @@ public class UserServiceImpl implements UserService {
         userRepository.save(userToCredit);
 
         // Save Transaction
-        transactionService.saveTransaction(buildTransactionDto(userToCredit.getAccountNumber(), "CREDIT", creditDebitRequest.getAmount(), reference));
+        transactionService.saveTransaction(buildTransactionDto(userToCredit.getAccountNumber(), "CREDIT",
+                creditDebitRequest.getAmount(), reference, creditDebitRequest.getSource()));
 
         String fullName = buildFullName(userToCredit);
 
@@ -210,6 +211,7 @@ public class UserServiceImpl implements UserService {
                         .accountNumber(creditDebitRequest.getAccountNumber())
                         .accountName(fullName)
                         .build())
+                .counterpartySource(creditDebitRequest.getSource())
                 .build();
     }
 
@@ -239,7 +241,8 @@ public class UserServiceImpl implements UserService {
 
         // Save Transaction
         Transaction savedTransaction = transactionService.saveTransaction(
-                buildTransactionDto(userToDebit.getAccountNumber(), "DEBIT", creditDebitRequest.getAmount(), reference)
+                buildTransactionDto(userToDebit.getAccountNumber(), "DEBIT", creditDebitRequest.getAmount(),
+                        reference, creditDebitRequest.getDestination())
         );
 
 
@@ -254,6 +257,7 @@ public class UserServiceImpl implements UserService {
                         .accountNumber(creditDebitRequest.getAccountNumber())
                         .accountName(fullName)
                         .build())
+                .counterpartySource(creditDebitRequest.getDestination())
                 .build();
     }
 
@@ -288,7 +292,8 @@ public class UserServiceImpl implements UserService {
         userRepository.save(sourceAccount);
 
         // Save Transaction
-        transactionService.saveTransaction(buildTransactionDto(sourceAccount.getAccountNumber(), "DEBIT", transferRequest.getAmount(), reference));
+        transactionService.saveTransaction(buildTransactionDto(sourceAccount.getAccountNumber(), "DEBIT",
+                transferRequest.getAmount(), reference, transferRequest.getDestinationAccountNumber()));
 
         // Send Debit Amount Email Alert
 //        EmailDetails debitAlert = EmailDetails.builder()
@@ -309,7 +314,8 @@ public class UserServiceImpl implements UserService {
 
         // Save Transaction
 
-        transactionService.saveTransaction(buildTransactionDto(destinationAccount.getAccountNumber(), "CREDIT", transferRequest.getAmount(), reference));
+        transactionService.saveTransaction(buildTransactionDto(destinationAccount.getAccountNumber(), "CREDIT",
+                transferRequest.getAmount(), reference, transferRequest.getSourceAccountNumber()));
 
         // Send Credit Amount Email Alert
 //        EmailDetails creditAlert = EmailDetails.builder()
@@ -335,12 +341,14 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.joining(" "));
     }
 
-    private TransactionDto buildTransactionDto(String accountNumber, String type, BigDecimal amount, String reference) {
+    private TransactionDto buildTransactionDto(String accountNumber, String type, BigDecimal amount, String reference
+            , String source) {
         return TransactionDto.builder()
                 .transactionReference(reference)
                 .accountNumber(accountNumber)
                 .transactionType(type)
                 .amount(amount)
+                .counterpartySource(source)
                 .build();
     }
 }

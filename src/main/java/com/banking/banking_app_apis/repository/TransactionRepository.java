@@ -8,6 +8,7 @@ import org.springframework.data.repository.PagingAndSortingRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 public interface TransactionRepository extends JpaRepository<Transaction, String>, PagingAndSortingRepository<Transaction, String> {
 
@@ -23,5 +24,5 @@ public interface TransactionRepository extends JpaRepository<Transaction, String
             Pageable pageable
     );
 
-    List<Transaction> findByTransactionReference(String transactionReference);
+    List<Transaction> findByTransactionReferenceIn(Set<String> reference);
 }

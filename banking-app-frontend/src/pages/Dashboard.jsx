@@ -51,7 +51,7 @@ function Dashboard() {
                 params: {
                     accountNumber,
                     page,
-                    limit: 10,
+                    limit: 5,
                     sortBy: "createdAt",
                     sortOrder: "DESC",
                 }

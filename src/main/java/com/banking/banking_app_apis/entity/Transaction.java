@@ -21,6 +21,7 @@ public class Transaction {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String transactionId;
     private String transactionReference;
+    private String counterPartySource;
     private String transactionType;
     private BigDecimal amount;
     private String accountNumber;

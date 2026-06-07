@@ -11,7 +11,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class TransactionServiceImpl implements TransactionService {
@@ -26,6 +29,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .transactionType(transactionDto.getTransactionType())
                 .accountNumber(transactionDto.getAccountNumber())
                 .amount(transactionDto.getAmount())
+                .counterPartySource(transactionDto.getCounterpartySource())
                 .status("SUCCESS")
                 .build();
 
@@ -49,34 +53,30 @@ public class TransactionServiceImpl implements TransactionService {
         Page<Transaction> transactions =
                 transactionRepository.findByAccountNumber(accountNumber, pageable);
 
-        return transactions.map(transaction -> {
+        Set<String> references = transactions.getContent().stream()
+                .map(Transaction::getTransactionReference)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
-            String counterpartyAccountNumber = null;
+        Map<String, String> counterpartyMap = transactionRepository
+                .findByTransactionReferenceIn(references)
+                .stream()
+                .filter(t -> !t.getAccountNumber().equals(accountNumber))
+                .collect(Collectors.toMap(
+                        Transaction::getTransactionReference,
+                        Transaction::getAccountNumber,
+                        (existing, replacement) -> existing // keep first if duplicate
+                ));
 
-            if (transaction.getTransactionReference() != null) {
-
-                List<Transaction> relatedTransactions =
-                        transactionRepository.findByTransactionReference(
-                                transaction.getTransactionReference());
-
-                counterpartyAccountNumber = relatedTransactions.stream()
-                        .filter(t -> !t.getAccountNumber()
-                                .equals(transaction.getAccountNumber()))
-                        .map(Transaction::getAccountNumber)
-                        .findFirst()
-                        .orElse(null);
-            }
-
-            return TransactionDto.builder()
-                    .transactionReference(transaction.getTransactionReference())
-                    .transactionType(transaction.getTransactionType())
-                    .amount(transaction.getAmount())
-                    .accountNumber(transaction.getAccountNumber())
-                    .counterpartyAccountNumber(counterpartyAccountNumber)
-                    .status(transaction.getStatus())
-                    .createdAt(transaction.getCreatedAt())
-                    .build();
-        });
+        return transactions.map(transaction -> TransactionDto.builder()
+                .transactionReference(transaction.getTransactionReference())
+                .transactionType(transaction.getTransactionType())
+                .amount(transaction.getAmount())
+                .accountNumber(transaction.getAccountNumber())
+                .counterpartySource(transaction.getCounterPartySource())
+                .status(transaction.getStatus())
+                .createdAt(transaction.getCreatedAt())
+                .build());
     }
 
 
