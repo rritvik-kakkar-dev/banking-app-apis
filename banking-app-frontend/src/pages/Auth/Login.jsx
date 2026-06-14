@@ -1,5 +1,6 @@
 import { useState } from "react";
-import api from "../services/api";
+import api from "../../services/api";
+import { useLocation } from "react-router-dom";
 
 function Login() {
     const [email, setEmail] = useState("");
@@ -19,6 +20,9 @@ function Login() {
             setLoading(false);
         }
     }
+
+    const location = useLocation()
+    const successMessage = location.state?.message
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#f5f5f0]">

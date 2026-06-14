@@ -54,6 +54,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public BankResponse createAccount(UserRequest userRequest) {
 
+        System.out.println(Role.ROLE_USER);
         if(userRepository.existsByEmail(userRequest.getEmail())) {
             throw new DuplicateAccountException("Account with this email already exists: "
                     + userRequest.getEmail());

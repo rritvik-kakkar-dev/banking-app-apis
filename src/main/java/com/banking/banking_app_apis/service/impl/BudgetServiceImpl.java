@@ -17,6 +17,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class BudgetServiceImpl implements BudgetService {
@@ -71,16 +73,131 @@ public class BudgetServiceImpl implements BudgetService {
     @Override
     public void invitePartner(Long groupId, String partnerEmail, User currentUser) {
 
+        BudgetGroup budgetGroup = budgetGroupRepository.findById(groupId).orElseThrow(() -> new ResourceNotFoundException("No Budget " +
+                "group found with this ID: " + groupId));
+
+        if(!budgetGroup.getCreatedBy().getId().equals(currentUser.getId())) {
+            throw new ValidationException("Only the group creator can invite a partner");
+        }
+
+        if(!budgetGroup.getType().equals(BudgetGroupType.COUPLE)) {
+            throw new ValidationException("Partner invite is only allowed for COUPLE budget groups");
+        }
+
+        if(budgetGroup.getPartner() != null) {
+            throw new ValidationException("This group already has a partner");
+        }
+
+        User partner = userRepository.findByEmail(partnerEmail).orElseThrow(() -> new ResourceNotFoundException("No user found with email: " + partnerEmail));
+
+        if (partner.getId().equals(currentUser.getId())) {
+            throw new ValidationException("You cannot invite yourself as a partner.");
+        }
+
+        EmailDetails inviteEmail = EmailDetails.builder()
+                .recipient(partnerEmail)
+                .subject("Budget Group Invitation - Vaulta")
+                .messageBody("Hi " + partner.getFirstName() + ",\n\n"
+                        + currentUser.getFirstName() + " " + currentUser.getLastName()
+                        + " has invited you to join their couple budget group: \""
+                        + budgetGroup.getName() + "\".\n\n"
+                        + "Your Group ID is: " + groupId + "\n"
+                        + "Use this ID to accept the invite via the app.\n\n"
+                        + "— Volta Banking")
+                .build();
+
+        emailService.sendEmailAlert(inviteEmail);
+
     }
 
     @Override
     public void acceptInvite(Long groupId, User currentUser) {
 
+        BudgetGroup budgetGroup = budgetGroupRepository.findById(groupId).orElseThrow(() -> new ResourceNotFoundException("No Budget " +
+                "group found with this ID: " + groupId));
+
+        if(!budgetGroup.getType().equals(BudgetGroupType.COUPLE)) {
+            throw new ValidationException("Partner invite is only allowed for COUPLE budget groups");
+        }
+
+        if(budgetGroup.getPartner() != null) {
+            throw new ValidationException("This group already has a partner");
+        }
+
+        budgetGroup.setPartner(currentUser);
+        budgetGroupRepository.save(budgetGroup);
+
+        // Notify creator
+        EmailDetails creatorNotification = EmailDetails.builder()
+                .recipient(budgetGroup.getCreatedBy().getEmail())
+                .subject("Partner Joined Your Budget Group — Vaulta")
+                .messageBody("Hi " + budgetGroup.getCreatedBy().getFirstName() + ",\n\n"
+                        + currentUser.getFirstName() + " " + currentUser.getLastName()
+                        + " has accepted your invite and joined the budget group: \""
+                        + budgetGroup.getName() + "\".\n\n"
+                        + "— Vaulta Banking")
+                .build();
+        emailService.sendEmailAlert(creatorNotification);
+
+        // Notify partner
+        EmailDetails partnerNotification = EmailDetails.builder()
+                .recipient(currentUser.getEmail())
+                .subject("You Joined a Budget Group — Vaulta")
+                .messageBody("Hi " + currentUser.getFirstName() + ",\n\n"
+                        + "You have successfully joined the budget group: \""
+                        + budgetGroup.getName() + "\".\n\n"
+                        + "— Vaulta Banking")
+                .build();
+        emailService.sendEmailAlert(partnerNotification);
     }
 
     @Override
     public void splitCouple(Long groupId, User currentUser) {
 
+        BudgetGroup budgetGroup = budgetGroupRepository.findById(groupId).orElseThrow(() -> new ResourceNotFoundException("No Budget " +
+                "group found with this ID: " + groupId));
+
+        boolean isCreator = budgetGroup.getCreatedBy().getId().equals(currentUser.getId());
+        boolean isPartner = budgetGroup.getPartner() != null &&
+                budgetGroup.getPartner().getId().equals(currentUser.getId());
+
+        if (!isCreator && !isPartner) {
+            throw new ValidationException("You are not a member of this budget group.");
+        }
+
+        if(!budgetGroup.getType().equals(BudgetGroupType.COUPLE)) {
+            throw new ValidationException("Partner invite is only allowed for COUPLE budget groups");
+        }
+
+        if(budgetGroup.getPartner() == null) {
+            throw new ValidationException("This group does not have a partner");
+        }
+
+        User formerPartner = budgetGroup.getPartner();
+
+        budgetGroup.setPartner(null);
+        budgetGroupRepository.save(budgetGroup);
+
+        // Notify both users
+        EmailDetails creatorNotification = EmailDetails.builder()
+                .recipient(budgetGroup.getCreatedBy().getEmail())
+                .subject("Budget Group Split — Vaulta")
+                .messageBody("Hi " + budgetGroup.getCreatedBy().getFirstName() + ",\n\n"
+                        + "Your couple budget group \"" + budgetGroup.getName()
+                        + "\" has been split. All historical data is preserved.\n\n"
+                        + "— Vaulta Banking")
+                .build();
+        emailService.sendEmailAlert(creatorNotification);
+
+        EmailDetails partnerNotification = EmailDetails.builder()
+                .recipient(formerPartner.getEmail())
+                .subject("Budget Group Split — Vaulta")
+                .messageBody("Hi " + formerPartner.getFirstName() + ",\n\n"
+                        + "The couple budget group \"" + budgetGroup.getName()
+                        + "\" has been split. All historical data is preserved.\n\n"
+                        + "— Vaulta Banking")
+                .build();
+        emailService.sendEmailAlert(partnerNotification);
     }
 
     @Override
@@ -168,17 +285,71 @@ public class BudgetServiceImpl implements BudgetService {
 
     @Override
     public List<BudgetStatusResponse> getBudgetStatus(Long groupId, int year, int month) {
-        return List.of();
+
+        BudgetGroup budgetGroup =
+                budgetGroupRepository.findById(groupId).orElseThrow(() -> new ResourceNotFoundException("No Budget " +
+                        "group found with this ID: " + groupId));
+
+        List<Budget> budgets = budgetRepository.findByBudgetGroup(budgetGroup);
+
+        LocalDate startDate = LocalDate.of(year, month, 1);
+        LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+
+        List<Expense> expenses = expenseRepository.findByBudgetBudgetGroupAndDateBetween(budgetGroup, startDate,
+                endDate);
+
+        Map<Long, BigDecimal> spendByCategory = expenses.stream().collect(
+                Collectors.groupingBy(
+                        e -> e.getBudget().getCategory().getId(),
+                        Collectors.reducing(BigDecimal.ZERO, Expense::getAmount, BigDecimal::add)
+                )
+        );
+        return mapToBudgetStatusResponse(budgets, spendByCategory);
     }
 
     @Override
     public List<BudgetStatusResponse> getAnnualBudgetStatus(Long groupId, int year) {
-        return List.of();
+        BudgetGroup budgetGroup =
+                budgetGroupRepository.findById(groupId).orElseThrow(() -> new ResourceNotFoundException("No Budget " +
+                        "group found with this ID: " + groupId));
+
+        List<Budget> budgets = budgetRepository.findByBudgetGroup(budgetGroup);
+
+        LocalDate startDate = LocalDate.ofYearDay(year, 1);
+        LocalDate endDate = startDate.withDayOfYear(startDate.lengthOfYear());
+
+        List<Expense> expenses = expenseRepository.findByBudgetBudgetGroupAndDateBetween(budgetGroup, startDate,
+                endDate);
+
+        Map<Long, BigDecimal> spendByCategory = expenses.stream().collect(
+                Collectors.groupingBy(
+                        e -> e.getBudget().getCategory().getId(),
+                        Collectors.reducing(BigDecimal.ZERO, Expense::getAmount, BigDecimal::add)
+                )
+        );
+
+        return mapToBudgetStatusResponse(budgets, spendByCategory);
     }
 
     @Override
     public List<BudgetStatusResponse> getCustomBudgetStatus(Long groupId, LocalDate from, LocalDate to) {
-        return List.of();
+
+        BudgetGroup budgetGroup =
+                budgetGroupRepository.findById(groupId).orElseThrow(() -> new ResourceNotFoundException("No Budget " +
+                        "group found with this ID: " + groupId));
+
+        List<Budget> budgets = budgetRepository.findByBudgetGroup(budgetGroup);
+
+        List<Expense> expenses = expenseRepository.findByBudgetBudgetGroupAndDateBetween(budgetGroup, from, to);
+
+        Map<Long, BigDecimal> spendByCategory = expenses.stream().collect(
+                Collectors.groupingBy(
+                        e -> e.getBudget().getCategory().getId(),
+                        Collectors.reducing(BigDecimal.ZERO, Expense::getAmount, BigDecimal::add)
+                )
+        );
+
+        return mapToBudgetStatusResponse(budgets, spendByCategory);
     }
 
     @Override
@@ -199,18 +370,6 @@ public class BudgetServiceImpl implements BudgetService {
         return categoryRepository.save(category);
     }
 
-    private void checkBudgetAlert() {
-
-    }
-
-    private TransactionDto buildTransactionDto(String accountNumber, String type, BigDecimal amount) {
-        return TransactionDto.builder()
-                .accountNumber(accountNumber)
-                .transactionType(type)
-                .amount(amount)
-                .build();
-    }
-
 
     private void checkBudgetAlerts(Budget budget, User currentUser) {
         List<Expense> expenses = expenseRepository.findByBudgetAndDateBetween(budget, budget.getStartDate(),
@@ -218,8 +377,9 @@ public class BudgetServiceImpl implements BudgetService {
 
         BigDecimal totalSpent = expenses.stream().map(Expense::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        double percentUsed = totalSpent
-                .divide(budget.getLimitAmount(), 4, RoundingMode.HALF_UP)
+        double percentUsed = budget.getLimitAmount().compareTo(BigDecimal.ZERO) == 0
+                ? 0.0
+                : totalSpent.divide(budget.getLimitAmount(), 4, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100))
                 .doubleValue();
         
@@ -242,5 +402,32 @@ public class BudgetServiceImpl implements BudgetService {
 
             emailService.sendEmailAlert(budget80PercentUsedAlert);
         }
+    }
+
+    private List<BudgetStatusResponse> mapToBudgetStatusResponse(
+            List<Budget> budgets, Map<Long, BigDecimal> spendByCategory) {
+
+        return budgets.stream()
+                .map(budget -> {
+                    BigDecimal spent = spendByCategory.getOrDefault(
+                            budget.getCategory().getId(), BigDecimal.ZERO);
+                    BigDecimal remaining = budget.getLimitAmount().subtract(spent);
+                    double percentUsed = budget.getLimitAmount().compareTo(BigDecimal.ZERO) == 0
+                            ? 0.0
+                            : spent.divide(budget.getLimitAmount(), 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100))
+                            .doubleValue();
+
+                    return BudgetStatusResponse.builder()
+                            .categoryName(budget.getCategory().getName())
+                            .categoryIcon(budget.getCategory().getIcon())
+                            .limit(budget.getLimitAmount())
+                            .spent(spent)
+                            .remaining(remaining)
+                            .percentUsed(percentUsed)
+                            .alertTriggered(percentUsed >= 80.0)
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 }
