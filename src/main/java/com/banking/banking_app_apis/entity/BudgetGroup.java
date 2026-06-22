@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -23,6 +24,8 @@ public class BudgetGroup {
 
     @Enumerated(EnumType.STRING)
     private BudgetGroupType type;
+
+    private BigDecimal groupLimitAmount;
 
     @ManyToOne
     @JoinColumn(name = "created_by")

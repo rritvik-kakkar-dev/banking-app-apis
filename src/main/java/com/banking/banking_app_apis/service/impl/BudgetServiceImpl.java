@@ -16,9 +16,12 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class BudgetServiceImpl implements BudgetService {
@@ -68,6 +71,45 @@ public class BudgetServiceImpl implements BudgetService {
 
         return budgetGroupRepository.save(budgetGroup);
 
+    }
+
+    @Override
+    public void deleteBudgetGroup(Long budgetGroupId, User currentUser) {
+
+        BudgetGroup budgetGroup = budgetGroupRepository.findById(budgetGroupId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Budget Group not found with ID: " + budgetGroupId));
+
+        boolean isMember = budgetGroup.getCreatedBy().getId().equals(currentUser.getId())
+                        || (budgetGroup.getPartner() != null
+                        && budgetGroup.getPartner().getId().equals(currentUser.getId()));
+
+        if (!isMember) {
+            throw new ValidationException("You are not a member of this budget group.");
+        }
+
+        List<Budget> budgets = budgetRepository.findByBudgetGroup(budgetGroup);
+        List<Expense> expenses = expenseRepository.findByBudgetIn(budgets);
+
+        Map<Long, String> accountNumbersByBudgetId = budgets.stream()
+                .collect(Collectors.toMap(
+                        Budget::getId,
+                        b -> b.getLinkedAccount().getAccountNumber()
+                ));
+
+        for (Expense expense : expenses) {
+            CreditDebitRequest request = CreditDebitRequest.builder()
+                    .accountNumber(accountNumbersByBudgetId.get(expense.getBudget().getId()))
+                    .amount(expense.getAmount())
+                    .source("Budget Group Deletion Refund")
+                    .build();
+
+            userService.creditAmount(request);
+        }
+
+        expenseRepository.deleteAll(expenses);
+        budgetRepository.deleteAll(budgets);
+        budgetGroupRepository.delete(budgetGroup);
     }
 
     @Override
@@ -216,39 +258,15 @@ public class BudgetServiceImpl implements BudgetService {
 
         User linkedAccountUser = userRepository.findByAccountNumber(request.getLinkedAccountNumber());
 
-        LocalDate startDate;
-        LocalDate endDate;
-
-        if (request.getPeriod().equals(BudgetPeriod.MONTHLY)) {
-            startDate = LocalDate.now().withDayOfMonth(1);
-            endDate = LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth());
-
-        } else if (request.getPeriod().equals(BudgetPeriod.ANNUAL)) {
-            startDate = LocalDate.of(LocalDate.now().getYear(), 1, 1);        // Jan 1 current year
-            endDate = LocalDate.of(LocalDate.now().getYear(), 12, 31);        // Dec 31 current year
-
-        } else {
-            if (request.getStartDate() == null) {
-                throw new ValidationException("Start date is required for custom period budgets.");
-            }
-            if (request.getEndDate() == null) {
-                throw new ValidationException("End date is required for custom period budgets.");
-            }
-            if (request.getEndDate().isBefore(request.getStartDate())) {
-                throw new ValidationException("End date cannot be before start date.");
-            }
-
-            startDate = request.getStartDate();
-            endDate = request.getEndDate();
-        }
+        LocalDate[] dates = calculateBudgetDates(request);
 
         Budget budget = Budget.builder()
                 .budgetGroup(group)
                 .category(category)
                 .limitAmount(request.getLimitAmount())
                 .period(request.getPeriod())
-                .startDate(startDate)
-                .endDate(endDate)
+                .startDate(dates[0])
+                .endDate(dates[1])
                 .linkedAccount(linkedAccountUser)
                 .alertAt80Percent(true)
                 .build();
@@ -258,6 +276,70 @@ public class BudgetServiceImpl implements BudgetService {
     }
 
     @Override
+    public Budget updateBudget(Long budgetId, BudgetRequest request, User currentUser) {
+
+        Budget budget = budgetRepository.findById(budgetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Budget not found: " + budgetId));
+
+        BudgetGroup group = budget.getBudgetGroup();
+        boolean isMember = group.getCreatedBy().getId().equals(currentUser.getId())
+                || (group.getPartner() != null && group.getPartner().getId().equals(currentUser.getId()));
+
+        if (!isMember) {
+            throw new ValidationException("You are not a member of this budget's group.");
+        }
+
+        // Update fields
+        budget.setLimitAmount(request.getLimitAmount());
+        budget.setAlertAt80Percent(request.getAlertAt80Percent() != null ? request.getAlertAt80Percent() : true);
+
+        // If period or dates changed, recalculate — reuse the same logic as createBudget()
+        LocalDate[] dates = calculateBudgetDates(request);
+        budget.setPeriod(request.getPeriod());
+        budget.setStartDate(dates[0]);
+        budget.setEndDate(dates[1]);
+
+        return budgetRepository.save(budget);
+    }
+
+    @Override
+    public void deleteBudget(Long budgetId, User currentUser) {
+
+        Budget budget = budgetRepository.findById(budgetId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Budget not found: " + budgetId));
+
+        BudgetGroup group = budget.getBudgetGroup();
+
+        boolean isMember = group.getCreatedBy().getId().equals(currentUser.getId())
+                || (group.getPartner() != null
+                && group.getPartner().getId().equals(currentUser.getId()));
+
+        if (!isMember) {
+            throw new ValidationException("You are not a member of this budget's group.");
+        }
+
+        String accountNumber = budget.getLinkedAccount().getAccountNumber();
+
+        List<Expense> expenses = expenseRepository.findByBudget(budget);
+
+        for (Expense expense : expenses) {
+            userService.creditAmount(
+                    CreditDebitRequest.builder()
+                            .accountNumber(accountNumber)
+                            .amount(expense.getAmount())
+                            .source("Budget Deletion Refund")
+                            .build()
+            );
+        }
+
+        expenseRepository.deleteAll(expenses);
+        budgetRepository.delete(budget);
+
+    }
+
+
+    @Override
     public Expense logExpense(ExpenseRequest request, User currentUser) {
         Budget budget = budgetRepository.findById(request.getBudgetId())
                 .orElseThrow(() -> new ResourceNotFoundException("Budget not found: " + request.getBudgetId()));
@@ -265,6 +347,7 @@ public class BudgetServiceImpl implements BudgetService {
         CreditDebitRequest debitRequest = CreditDebitRequest.builder()
                 .accountNumber(budget.getLinkedAccount().getAccountNumber())
                 .amount(request.getAmount())
+                .destination(request.getDescription())
                 .build();
 
         BankResponse debitResponse = userService.debitAmount(debitRequest);
@@ -370,6 +453,80 @@ public class BudgetServiceImpl implements BudgetService {
         return categoryRepository.save(category);
     }
 
+    @Override
+    public List<Expense> getExpenseHistory(Long budgetId, User currentUser) {
+        Budget budget = budgetRepository.findById(budgetId).orElseThrow(() -> new ResourceNotFoundException("No Budget found with this ID: " + budgetId));
+        List<Expense> expenses = expenseRepository.findByBudget(budget);
+
+        return expenses.stream().sorted(Comparator.comparing(Expense::getDate).reversed()).toList();
+    }
+
+    @Override
+    public List<BudgetGroupSummaryResponse> getMyBudgetGroups(User currentUser) {
+
+        List<BudgetGroup> budgetGroups = budgetGroupRepository.findByCreatedByOrPartner(currentUser, currentUser);
+        return mapToBudgetGroupSummaryResponse(budgetGroups);
+    }
+
+    @Override
+    public BudgetGroup setGroupLimit(Long groupId, BigDecimal limitAmount, User currentUser) {
+        BudgetGroup budgetGroup = budgetGroupRepository.findById(groupId).orElseThrow(() -> new ResourceNotFoundException("No Budget " +
+                "group found with this ID: " + groupId));
+
+        if (!budgetGroup.getCreatedBy().getId().equals(currentUser.getId())) {
+            throw new ValidationException("Only the group creator can set limit to the budget group!");
+        }
+
+        if (limitAmount == null || limitAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Limit amount must be greater than zero.");
+        }
+
+        budgetGroup.setGroupLimitAmount(limitAmount);
+        return budgetGroupRepository.save(budgetGroup);
+    }
+
+    @Override
+    public GroupBudgetStatusResponse getGroupBudgetStatus(Long groupId, int year, int month) {
+        BudgetGroup budgetGroup = budgetGroupRepository.findById(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("No Budget group found with this ID: " + groupId));
+
+        LocalDate startDate = LocalDate.of(year, month, 1);
+        LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+
+        List<Expense> expenses = expenseRepository.findByBudgetBudgetGroupAndDateBetween(budgetGroup, startDate, endDate);
+
+        BigDecimal totalSpent = expenses.stream().map(Expense::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal groupLimit = budgetGroup.getGroupLimitAmount();
+
+        // No limit set yet — return status with null limit, 0% used
+        if (groupLimit == null) {
+            return GroupBudgetStatusResponse.builder()
+                    .groupName(budgetGroup.getName())
+                    .groupLimit(null)
+                    .totalSpent(totalSpent)
+                    .remaining(null)
+                    .percentUsed(0.0)
+                    .alertTriggered(false)
+                    .build();
+        }
+
+        double percentUsed = groupLimit.compareTo(BigDecimal.ZERO) == 0
+                ? 0.0
+                : totalSpent.divide(groupLimit, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .doubleValue();
+
+        return GroupBudgetStatusResponse.builder()
+                .groupName(budgetGroup.getName())
+                .groupLimit(groupLimit)
+                .totalSpent(totalSpent)
+                .remaining(groupLimit.subtract(totalSpent))
+                .percentUsed(percentUsed)
+                .alertTriggered(percentUsed >= 80.0)
+                .build();
+    }
+
 
     private void checkBudgetAlerts(Budget budget, User currentUser) {
         List<Expense> expenses = expenseRepository.findByBudgetAndDateBetween(budget, budget.getStartDate(),
@@ -404,8 +561,7 @@ public class BudgetServiceImpl implements BudgetService {
         }
     }
 
-    private List<BudgetStatusResponse> mapToBudgetStatusResponse(
-            List<Budget> budgets, Map<Long, BigDecimal> spendByCategory) {
+    private List<BudgetStatusResponse> mapToBudgetStatusResponse(List<Budget> budgets, Map<Long, BigDecimal> spendByCategory) {
 
         return budgets.stream()
                 .map(budget -> {
@@ -426,8 +582,65 @@ public class BudgetServiceImpl implements BudgetService {
                             .remaining(remaining)
                             .percentUsed(percentUsed)
                             .alertTriggered(percentUsed >= 80.0)
+                            .budgetId(budget.getId())
+                            .categoryColor(budget.getCategory().getColor())
+                            .period(budget.getPeriod())
+                            .linkedAccountNumber(budget.getLinkedAccount().getAccountNumber())
                             .build();
                 })
                 .collect(Collectors.toList());
     }
+    private List<BudgetGroupSummaryResponse> mapToBudgetGroupSummaryResponse(List<BudgetGroup> budgetGroups) {
+
+        return budgetGroups.stream()
+                .map(budgetGroup -> {
+                    return BudgetGroupSummaryResponse.builder()
+                            .id(budgetGroup.getId())
+                            .name(budgetGroup.getName())
+                            .createdByName(buildFullName(budgetGroup.getCreatedBy()))
+                            .createdByEmail(budgetGroup.getCreatedBy().getEmail())
+                            .groupLimitAmount(budgetGroup.getGroupLimitAmount())
+                            .type(budgetGroup.getType())
+                            .partnerEmail(budgetGroup.getPartner() != null ? budgetGroup.getPartner().getEmail() : null)
+                            .partnerName(budgetGroup.getPartner() != null ? buildFullName(budgetGroup.getPartner()) : null)
+                            .active(budgetGroup.isActive())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    private String buildFullName(User user) {
+        return Stream.of(user.getFirstName(), user.getLastName(), user.getOtherName())
+                .filter(Objects::nonNull)
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.joining(" "));
+    }
+
+    private LocalDate[] calculateBudgetDates(BudgetRequest request) {
+        LocalDate startDate;
+        LocalDate endDate;
+
+        if (request.getPeriod().equals(BudgetPeriod.MONTHLY)) {
+            startDate = LocalDate.now().withDayOfMonth(1);
+            endDate = LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth());
+        } else if (request.getPeriod().equals(BudgetPeriod.ANNUAL)) {
+            startDate = LocalDate.of(LocalDate.now().getYear(), 1, 1);
+            endDate = LocalDate.of(LocalDate.now().getYear(), 12, 31);
+        } else {
+            if (request.getStartDate() == null) {
+                throw new ValidationException("Start date is required for custom period budgets.");
+            }
+            if (request.getEndDate() == null) {
+                throw new ValidationException("End date is required for custom period budgets.");
+            }
+            if (request.getEndDate().isBefore(request.getStartDate())) {
+                throw new ValidationException("End date cannot be before start date.");
+            }
+            startDate = request.getStartDate();
+            endDate = request.getEndDate();
+        }
+
+        return new LocalDate[]{startDate, endDate};
+    }
+
 }

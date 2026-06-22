@@ -16,4 +16,6 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     List<Expense> findByBudgetAndDateBetween(Budget budget, LocalDate startDate, LocalDate endDate);
 
+    List<Expense> findByBudgetIn(List<Budget> budgets);
+
 }

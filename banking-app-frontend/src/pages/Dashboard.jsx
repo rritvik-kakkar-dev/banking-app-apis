@@ -1,13 +1,34 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import api from "../services/api";
+import { deleteBudget } from "../services/budgetApi";
+import { toast } from "react-toastify";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+    faMoneyBillTransfer,
+    faCreditCard as faSolidCreditCard
+} from '@fortawesome/free-solid-svg-icons';
+
+import {
+    faCreditCard as faRegularCreditCard
+} from '@fortawesome/free-regular-svg-icons';
 
 import CreditModal from "../components/Modals/CreditModal";
 import DebitModal from "../components/Modals/DebitModal";
 import TransferModal from "../components/Modals/TransferModal";
 import TransactionHistoryList from "../components/Listing/TransactionHistoryList";
+import ShowAllTransactionsModal from "../components/Modals/ShowAllTransactionsModal";
 
-function Dashboard() {
+import BudgetWidget from "../components/Budget/BudgetWidget";
+import SetupBudgetModal from "../components/Budget/SetupBudgetModal";
+import CreateBudgetModal from "../components/Budget/CreateBudgetModal";
+import LogExpenseModal from "../components/Budget/LogExpenseModal";
+import ExpenseHistoryModal from "../components/Budget/ExpenseHistoryModal";
+import BudgetGroupSelector from "../components/Budget/BudgetGroupSelector";
+import GroupLimitModal from "../components/Budget/GroupLimitModal";
+
+
+function Dashboard({ showAllTransactions }) {
     const navigate = useNavigate();
 
     const accountNumber = localStorage.getItem("accountNumber");
@@ -26,6 +47,16 @@ function Dashboard() {
     const [page, setPage] = useState(0);
     const [transactions, setTransactions] = useState([]);
     const [totalPages, setTotalPages] = useState(0);
+
+    const [budgetGroupId, setBudgetGroupId] = useState(null);
+
+    const [budgetRefreshKey, setBudgetRefreshKey] = useState(0);
+    const [selectedBudget, setSelectedBudget] = useState(null);
+
+    const [groupCreatedSignal, setGroupCreatedSignal] = useState(null);
+
+    const [selectedGroupLimit, setSelectedGroupLimit] = useState(null);
+
 
     useEffect(() => {
         fetchTransactionsHistory();
@@ -95,6 +126,68 @@ function Dashboard() {
                 <TransferModal
                     onClose={() => setActiveModal(null)}
                     onSuccess={refreshDashboard}
+                />
+            )}
+
+            {activeModal === 'createBudget' && (
+                <CreateBudgetModal
+                    budgetGroupId={budgetGroupId}
+                    onClose={() => setActiveModal(null)}
+                    onSuccess={async () => {
+                        setBudgetRefreshKey(prev => prev + 1);
+                    }}
+                />
+            )}
+
+            {activeModal === 'updateBudget' && (
+                <CreateBudgetModal
+                    budgetGroupId={budgetGroupId}
+                    editingBudget={selectedBudget}
+                    onClose={() => setActiveModal(null)}
+                    onSuccess={async () => setBudgetRefreshKey(prev => prev + 1)}
+                />
+            )}
+
+            {activeModal === 'logExpense' && (
+                <LogExpenseModal
+                    budget={selectedBudget}
+                    onClose={() => setActiveModal(null)}
+                    onSuccess={async () => {
+                        setBudgetRefreshKey(prev => prev + 1);
+                        refreshDashboard();
+                    }}
+                />
+            )}
+
+            {activeModal === 'expenseHistory' && (
+                <ExpenseHistoryModal
+                    budget={selectedBudget}
+                    onClose={() => setActiveModal(null)}
+                />
+            )}
+
+            {activeModal === 'showAllTransactions' && (
+                <ShowAllTransactionsModal
+                    onClose={() => setActiveModal(null)}
+                />
+            )}
+
+            {activeModal === 'setupBudget' && (
+                <SetupBudgetModal
+                    onClose={() => setActiveModal(null)}
+                    onSuccess={(budgetGroup) => {
+                        setBudgetGroupId(budgetGroup.id);
+                        setGroupCreatedSignal(budgetGroup);
+                    }}
+                />
+            )}
+
+            {activeModal === 'setGroupLimit' && (
+                <GroupLimitModal
+                    groupId={budgetGroupId}
+                    currentLimit={selectedGroupLimit}
+                    onClose={() => setActiveModal(null)}
+                    onSuccess={() => setBudgetRefreshKey(prev => prev + 1)}
                 />
             )}
 
@@ -176,9 +269,11 @@ function Dashboard() {
                         <div className="grid grid-cols-3 gap-4 mb-6">
                             <button
                                 onClick={() => setActiveModal("credit")}
-                                className="bg-[#fefefe] hover:bg-[#f0f0eb] border border-[#e8e8e3] rounded-2xl p-4 text-center transition-all shadow-sm hover:shadow-md"
+                                className="bg-[#fefefe] hover:bg-[#f0f0eb] border border-[#e8e8e3] rounded-2xl p-4 text-center transition-all shadow-sm hover:shadow-md cursor-pointer"
                             >
-                                <div className="text-2xl mb-2">💰</div>
+                                <div className="text-2xl mb-2">
+                                    <FontAwesomeIcon icon={faSolidCreditCard} />
+                                </div>
                                 <p className="text-gray-700 text-sm font-medium">
                                     Credit
                                 </p>
@@ -186,9 +281,11 @@ function Dashboard() {
 
                             <button
                                 onClick={() => setActiveModal("debit")}
-                                className="bg-[#fefefe] hover:bg-[#f0f0eb] border border-[#e8e8e3] rounded-2xl p-4 text-center transition-all shadow-sm hover:shadow-md"
+                                className="bg-[#fefefe] hover:bg-[#f0f0eb] border border-[#e8e8e3] rounded-2xl p-4 text-center transition-all shadow-sm hover:shadow-md cursor-pointer"
                             >
-                                <div className="text-2xl mb-2">💸</div>
+                                <div className="text-2xl mb-2">
+                                    <FontAwesomeIcon icon={faRegularCreditCard} />
+                                </div>
                                 <p className="text-gray-700 text-sm font-medium">
                                     Debit
                                 </p>
@@ -196,9 +293,11 @@ function Dashboard() {
 
                             <button
                                 onClick={() => setActiveModal("transfer")}
-                                className="bg-[#fefefe] hover:bg-[#f0f0eb] border border-[#e8e8e3] rounded-2xl p-4 text-center transition-all shadow-sm hover:shadow-md"
+                                className="bg-[#fefefe] hover:bg-[#f0f0eb] border border-[#e8e8e3] rounded-2xl p-4 text-center transition-all shadow-sm hover:shadow-md cursor-pointer"
                             >
-                                <div className="text-2xl mb-2">🔄</div>
+                                <div className="text-2xl mb-2">
+                                    <FontAwesomeIcon icon={faMoneyBillTransfer} />
+                                </div>
                                 <p className="text-gray-700 text-sm font-medium">
                                     Transfer
                                 </p>
@@ -207,9 +306,18 @@ function Dashboard() {
 
                         {/* Recent Transactions */}
                         <div className="bg-[#fefefe] border border-[#e8e8e3] rounded-2xl p-6 shadow-sm">
-                            <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-6">
-                                Recent Transactions
-                            </p>
+                            <div className="flex justify-between items-center mb-6">
+                                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">
+                                    Recent Transactions
+                                </p>
+
+                                <button
+                                    onClick={() => setActiveModal("showAllTransactions")}
+                                    className="text-blue-500 hover:text-purple-500 text-xs font-semibold transition-colors cursor-pointer"
+                                >
+                                    Show all transactions
+                                </button>
+                            </div>
 
                             <TransactionHistoryList
                                 transactions={transactions}
@@ -217,6 +325,56 @@ function Dashboard() {
                                 page={page}
                                 totalPages={totalPages}
                                 onPageChange={setPage}
+                            />
+                        </div>
+
+                        <div className="mt-6">
+                            <BudgetGroupSelector
+                                activeGroupId={budgetGroupId}
+                                onSelectGroup={setBudgetGroupId}
+                                onCreateNewGroup={() => setActiveModal('setupBudget')}
+                                onGroupDeleted={refreshDashboard}
+                                onGroupCreated={groupCreatedSignal}
+                            />
+
+                            <BudgetWidget
+                                key={budgetRefreshKey}
+                                budgetGroupId={budgetGroupId}
+                                onSetupClick={() => setActiveModal('setupBudget')}
+                                onAddBudgetClick={() => setActiveModal('createBudget')}
+                                onLogExpenseClick={(budget) => {
+                                    setActiveModal('logExpense');
+                                    setSelectedBudget(budget);
+                                }}
+                                onViewExpensesClick={(budget) => {
+                                    setActiveModal('viewExpenses');
+                                    setSelectedBudget(budget);
+                                }}
+                                onViewHistoryClick={(budget) => {
+                                    setActiveModal('expenseHistory');
+                                    setSelectedBudget(budget);
+                                }}
+                                onSetGroupLimitClick={(currentLimit) => {
+                                    setSelectedGroupLimit(currentLimit);
+                                    setActiveModal('setGroupLimit');
+                                }}
+                                onEditClick={(budget) => {
+                                    setSelectedBudget(budget);
+                                    setActiveModal('updateBudget');
+                                }}
+                                onDeleteClick={(budget) => {
+                                    if (window.confirm("Are you sure you want to delete this budget? This will refund all logged expenses.")) {
+                                        deleteBudget(budget.budgetId)
+                                            .then(() => {
+                                                toast.success("Budget deleted and expenses refunded");
+                                                setBudgetRefreshKey(prev => prev + 1);
+                                                refreshDashboard();
+                                            })
+                                            .catch(() => {
+                                                toast.error("Failed to delete budget");
+                                            });
+                                    }
+                                }}
                             />
                         </div>
                     </>

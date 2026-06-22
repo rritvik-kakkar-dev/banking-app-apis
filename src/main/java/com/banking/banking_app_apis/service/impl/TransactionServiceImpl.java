@@ -76,6 +76,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .counterpartySource(transaction.getCounterPartySource())
                 .status(transaction.getStatus())
                 .createdAt(transaction.getCreatedAt())
+                .transactionId(transaction.getTransactionId())
                 .build());
     }
 

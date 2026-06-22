@@ -1,5 +1,6 @@
 package com.banking.banking_app_apis.dto;
 
+import com.banking.banking_app_apis.entity.BudgetPeriod;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,4 +21,8 @@ public class BudgetStatusResponse {
     private BigDecimal remaining;
     private double percentUsed;
     private boolean alertTriggered;
+    private Long budgetId;
+    private String categoryColor;
+    private BudgetPeriod period;
+    private String linkedAccountNumber;
 }

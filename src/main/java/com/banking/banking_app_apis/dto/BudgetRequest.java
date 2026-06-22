@@ -22,5 +22,5 @@ public class BudgetRequest {
     private LocalDate startDate;
     private LocalDate endDate;
     private String linkedAccountNumber;
-    private boolean alertAt80Percent;
+    private Boolean alertAt80Percent;
 }

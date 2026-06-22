@@ -20,4 +20,5 @@ public class TransactionDto {
     private String counterpartySource;
     private String status;
     private LocalDateTime createdAt;
+    private String transactionId;
 }
