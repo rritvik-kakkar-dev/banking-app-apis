@@ -1,0 +1,7 @@
+package com.banking.banking_app_apis.entity;
+
+public enum InterestType {
+    FIXED,
+    FLOATING,
+    REDUCING
+}
