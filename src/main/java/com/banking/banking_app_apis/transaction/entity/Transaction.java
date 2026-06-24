@@ -1,6 +1,5 @@
 package com.banking.banking_app_apis.transaction.entity;
 
-import com.banking.banking_app_apis.account.entity.Account;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -25,8 +24,7 @@ public class Transaction {
     private String counterPartySource;
     private String transactionType;
     private BigDecimal amount;
-    @ManyToOne
-    private Account account;
+    private String accountNumber;
     private String status;
 
     @CreationTimestamp

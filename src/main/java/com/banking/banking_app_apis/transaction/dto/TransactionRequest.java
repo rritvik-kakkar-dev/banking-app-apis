@@ -1,33 +1,23 @@
 package com.banking.banking_app_apis.transaction.dto;
 
+import com.banking.banking_app_apis.account.entity.Account;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class TransactionResponse {
-    private String transactionId;
+public class TransactionRequest {
 
     private String transactionReference;
-
     private String transactionType;
-
     private BigDecimal amount;
-
-    private String accountNumber;
-
-    private String accountName;
-
+    private Account account;
     private String counterpartyAccountNumber;
 
-    private String status;
-
-    private LocalDateTime createdAt;
 }

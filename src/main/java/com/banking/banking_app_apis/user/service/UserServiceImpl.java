@@ -5,8 +5,12 @@ import com.banking.banking_app_apis.account.dto.AccountSummaryResponse;
 import com.banking.banking_app_apis.account.dto.CreditDebitRequest;
 import com.banking.banking_app_apis.account.dto.EnquiryRequest;
 import com.banking.banking_app_apis.account.dto.TransferRequest;
+import com.banking.banking_app_apis.account.entity.Account;
+import com.banking.banking_app_apis.account.entity.AccountStatus;
+import com.banking.banking_app_apis.account.entity.AccountType;
+import com.banking.banking_app_apis.account.entity.CurrencyType;
+import com.banking.banking_app_apis.account.repository.AccountRepository;
 import com.banking.banking_app_apis.account.service.AccountNumberGenerator;
-import com.banking.banking_app_apis.account.util.AccountUtils;
 import com.banking.banking_app_apis.common.dto.BankResponse;
 import com.banking.banking_app_apis.common.exception.DuplicateAccountException;
 import com.banking.banking_app_apis.common.exception.InsufficientBalanceException;
@@ -14,7 +18,7 @@ import com.banking.banking_app_apis.common.exception.ResourceNotFoundException;
 import com.banking.banking_app_apis.notification.dto.EmailDetails;
 import com.banking.banking_app_apis.notification.service.EmailService;
 import com.banking.banking_app_apis.security.JwtTokenProvider;
-import com.banking.banking_app_apis.transaction.dto.TransactionResponse;
+import com.banking.banking_app_apis.transaction.dto.TransactionRequest;
 import com.banking.banking_app_apis.transaction.entity.Transaction;
 import com.banking.banking_app_apis.transaction.service.TransactionService;
 import com.banking.banking_app_apis.user.dto.LoginRequest;
@@ -22,6 +26,7 @@ import com.banking.banking_app_apis.user.dto.UpdateUserRequest;
 import com.banking.banking_app_apis.user.entity.Role;
 import com.banking.banking_app_apis.user.entity.User;
 import com.banking.banking_app_apis.user.repository.UserRepository;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -36,6 +41,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Service
+@Transactional
 public class UserServiceImpl implements UserService {
 
     @Autowired
@@ -56,6 +62,12 @@ public class UserServiceImpl implements UserService {
     @Autowired
     JwtTokenProvider jwtTokenProvider;
 
+    @Autowired
+    AccountNumberGenerator accountNumberGenerator;
+
+    @Autowired
+    AccountRepository accountRepository;
+
     /**
      * Creating an account - saving a new user into the db
      * Check if user already has an account
@@ -75,8 +87,6 @@ public class UserServiceImpl implements UserService {
                 .gender(updateUserRequest.getGender())
                 .address(updateUserRequest.getAddress())
                 .stateOfOrigin(updateUserRequest.getStateOfOrigin())
-                .accountNumber(AccountNumberGenerator.generateAccountNumber())
-                .accountBalance(BigDecimal.ZERO)
                 .email(updateUserRequest.getEmail())
                 .password(passwordEncoder.encode(updateUserRequest.getPassword()))
                 .phoneNumber(updateUserRequest.getPhoneNumber())
@@ -87,8 +97,17 @@ public class UserServiceImpl implements UserService {
 
         User savedUser = userRepository.save(newUser);
 
-        // Send email alert
-        String fullName = buildFullName(savedUser);
+        Account account = Account.builder()
+                .accountType(AccountType.SAVINGS)
+                .balance(BigDecimal.ZERO)
+                .currency(CurrencyType.INR)
+                .user(savedUser)
+                .accountName("Savings Account")
+                .accountNumber(accountNumberGenerator.generateAccountNumber())
+                .status(AccountStatus.ACTIVE)
+                .build();
+
+        accountRepository.save(account);
 
         EmailDetails emailDetails = EmailDetails.builder()
                 .recipient(savedUser.getEmail())
@@ -96,8 +115,8 @@ public class UserServiceImpl implements UserService {
                 .messageBody(
                         "Congratulations! Your account has been successfully created.\n\n" +
                                 "Your Account Details:\n" +
-                                "Account Name: " + fullName + "\n" +
-                                "Account Number: " + savedUser.getAccountNumber()
+                                "Account Name: " + account.getAccountName() + "\n" +
+                                "Account Number: " + account.getAccountNumber()
                 )
                 .build();
         emailService.sendEmailAlert(emailDetails);
@@ -106,9 +125,9 @@ public class UserServiceImpl implements UserService {
                 .responseCode(AccountConstants.ACCOUNT_CREATION_SUCCESS_CODE)
                 .responseMessage(AccountConstants.ACCOUNT_CREATION_SUCCESS_MESSAGE)
                 .accountSummaryResponse(AccountSummaryResponse.builder()
-                        .accountBalance(savedUser.getAccountBalance())
-                        .accountNumber(savedUser.getAccountNumber())
-                        .accountName(fullName)
+                        .accountBalance(account.getBalance())
+                        .accountNumber(account.getAccountNumber())
+                        .accountName(account.getAccountName())
                         .build())
                 .build();
     }
@@ -118,9 +137,6 @@ public class UserServiceImpl implements UserService {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
         );
-
-        User user = userRepository.findByEmail(loginRequest.getEmail()).get();
-        String fullName = buildFullName(user);
 
         // Send Login Email
         EmailDetails loginAlert = EmailDetails.builder()
@@ -135,11 +151,6 @@ public class UserServiceImpl implements UserService {
         return BankResponse.builder()
                 .responseCode("Login Success")
                 .responseMessage(jwtTokenProvider.generateToken(authentication))
-                .accountSummaryResponse(AccountSummaryResponse.builder()
-                        .accountNumber(user.getAccountNumber())
-                        .accountName(fullName)
-                        .accountBalance(user.getAccountBalance())
-                        .build())
                 .build();
     }
 
@@ -154,23 +165,21 @@ public class UserServiceImpl implements UserService {
     @Override
     public BankResponse balanceEnquiry(EnquiryRequest enquiryRequest) {
         // Check if the provided account number exists in the DB
-        boolean isAccountExists = userRepository.existsByAccountNumber(enquiryRequest.getAccountNumber());
+        boolean isAccountExists = accountRepository.existsByAccountNumber(enquiryRequest.getAccountNumber());
         if(!isAccountExists) {
             throw new ResourceNotFoundException("Account not found with account number: "
                     + enquiryRequest.getAccountNumber());
         }
 
-        User foundUser = userRepository.findByAccountNumber(enquiryRequest.getAccountNumber());
-
-        String fullName = buildFullName(foundUser);
+        Account userAccount = accountRepository.findByAccountNumber(enquiryRequest.getAccountNumber());
 
         return BankResponse.builder()
                 .responseCode(AccountConstants.ACCOUNT_FOUND_CODE)
                 .responseMessage(AccountConstants.ACCOUNT_FOUND_MESSAGE)
                 .accountSummaryResponse(AccountSummaryResponse.builder()
-                        .accountBalance(foundUser.getAccountBalance())
-                        .accountNumber(foundUser.getAccountNumber())
-                        .accountName(fullName)
+                        .accountBalance(userAccount.getBalance())
+                        .accountNumber(userAccount.getAccountNumber())
+                        .accountName(userAccount.getAccountName())
                         .build())
                 .build();
     }
@@ -178,15 +187,15 @@ public class UserServiceImpl implements UserService {
     @Override
     public String nameEnquiry(EnquiryRequest enquiryRequest) {
         // Check if the provided account number exists in the DB
-        boolean isAccountExists = userRepository.existsByAccountNumber(enquiryRequest.getAccountNumber());
+        boolean isAccountExists = accountRepository.existsByAccountNumber(enquiryRequest.getAccountNumber());
         if(!isAccountExists) {
             throw new ResourceNotFoundException("Account not found with account number: "
                     + enquiryRequest.getAccountNumber());
         }
 
-        User foundUser = userRepository.findByAccountNumber(enquiryRequest.getAccountNumber());
+        Account account = accountRepository.findByAccountNumber(enquiryRequest.getAccountNumber());
 
-        return buildFullName(foundUser);
+        return buildFullName(account.getUser());
     }
 
     @Override
@@ -195,30 +204,29 @@ public class UserServiceImpl implements UserService {
         String reference = UUID.randomUUID().toString();
 
         // Check if the provided account number exists in the DB
-        boolean isAccountExists = userRepository.existsByAccountNumber(creditDebitRequest.getAccountNumber());
+        boolean isAccountExists = accountRepository.existsByAccountNumber(creditDebitRequest.getAccountNumber());
         if(!isAccountExists) {
             throw new ResourceNotFoundException("Account not found with account number: "
                     + creditDebitRequest.getAccountNumber());
         }
 
-        User userToCredit = userRepository.findByAccountNumber(creditDebitRequest.getAccountNumber());
-        BigDecimal currentBalance = userToCredit.getAccountBalance();
-        userToCredit.setAccountBalance(currentBalance.add(creditDebitRequest.getAmount()));
-        userRepository.save(userToCredit);
+        Account accountToCredit = accountRepository.findByAccountNumber(creditDebitRequest.getAccountNumber());
+
+        BigDecimal currentBalance = accountToCredit.getBalance();
+        accountToCredit.setBalance(currentBalance.add(creditDebitRequest.getAmount()));
+        accountRepository.save(accountToCredit);
 
         // Save Transaction
-        transactionService.saveTransaction(buildTransactionDto(userToCredit.getAccountNumber(), "CREDIT",
+        transactionService.saveTransaction(buildTransactionRequest(accountToCredit, "CREDIT",
                 creditDebitRequest.getAmount(), reference, creditDebitRequest.getSource()));
-
-        String fullName = buildFullName(userToCredit);
 
         return BankResponse.builder()
                 .responseCode(AccountConstants.ACCOUNT_CREDITED_SUCCESS_CODE)
                 .responseMessage(AccountConstants.ACCOUNT_CREDITED_SUCCESS_MESSAGE)
                 .accountSummaryResponse(AccountSummaryResponse.builder()
-                        .accountBalance(userToCredit.getAccountBalance())
-                        .accountNumber(creditDebitRequest.getAccountNumber())
-                        .accountName(fullName)
+                        .accountBalance(accountToCredit.getBalance())
+                        .accountNumber(accountToCredit.getAccountNumber())
+                        .accountName(accountToCredit.getAccountName())
                         .build())
                 .counterpartySource(creditDebitRequest.getSource())
                 .build();
@@ -230,41 +238,39 @@ public class UserServiceImpl implements UserService {
         String reference = UUID.randomUUID().toString();
 
         // Check if the provided account number exists in the DB
-        boolean isAccountExists = userRepository.existsByAccountNumber(creditDebitRequest.getAccountNumber());
+        boolean isAccountExists = accountRepository.existsByAccountNumber(creditDebitRequest.getAccountNumber());
         if(!isAccountExists) {
             throw new ResourceNotFoundException("Account not found with account number: "
                     + creditDebitRequest.getAccountNumber());
         }
 
         // Check if amount you intent to withdraw is not more than the current account balance
-        User userToDebit = userRepository.findByAccountNumber(creditDebitRequest.getAccountNumber());
-        BigDecimal currentBalance = userToDebit.getAccountBalance();
+        Account accountToDebit = accountRepository.findByAccountNumber(creditDebitRequest.getAccountNumber());
 
-        if (creditDebitRequest.getAmount().compareTo(userToDebit.getAccountBalance()) > 0) {
+        BigDecimal currentBalance = accountToDebit.getBalance();
+
+        if (creditDebitRequest.getAmount().compareTo(accountToDebit.getBalance()) > 0) {
             throw new InsufficientBalanceException("Insufficient Balance: "
                     + creditDebitRequest.getAmount());
         }
 
-        userToDebit.setAccountBalance(currentBalance.subtract(creditDebitRequest.getAmount()));
-        userRepository.save(userToDebit);
+        accountToDebit.setBalance(currentBalance.subtract(creditDebitRequest.getAmount()));
+        accountRepository.save(accountToDebit);
 
         // Save Transaction
         Transaction savedTransaction = transactionService.saveTransaction(
-                buildTransactionDto(userToDebit.getAccountNumber(), "DEBIT", creditDebitRequest.getAmount(),
+                buildTransactionRequest(accountToDebit, "DEBIT", creditDebitRequest.getAmount(),
                         reference, creditDebitRequest.getDestination())
         );
-
-
-        String fullName = buildFullName(userToDebit);
 
         return BankResponse.builder()
                 .responseCode(AccountConstants.ACCOUNT_DEBITED_SUCCESS_CODE)
                 .responseMessage(AccountConstants.ACCOUNT_DEBITED_SUCCESS_MESSAGE)
                 .transactionId(savedTransaction.getTransactionId())
                 .accountSummaryResponse(AccountSummaryResponse.builder()
-                        .accountBalance(userToDebit.getAccountBalance())
+                        .accountBalance(accountToDebit.getBalance())
                         .accountNumber(creditDebitRequest.getAccountNumber())
-                        .accountName(fullName)
+                        .accountName(accountToDebit.getAccountName())
                         .build())
                 .counterpartySource(creditDebitRequest.getDestination())
                 .build();
@@ -276,32 +282,32 @@ public class UserServiceImpl implements UserService {
         String reference = UUID.randomUUID().toString();
 
         // Get the account to debit (Check source account exists)
-        boolean isSourceAccountExists = userRepository.existsByAccountNumber(transferRequest.getSourceAccountNumber());
+        boolean isSourceAccountExists = accountRepository.existsByAccountNumber(transferRequest.getSourceAccountNumber());
         if (!isSourceAccountExists) {
             throw new ResourceNotFoundException("Account not found with account number: " + transferRequest.getSourceAccountNumber());
         }
 
         // Get the account to credit (Check destination account exists)
-        boolean isDestinationAccountExists = userRepository.existsByAccountNumber(transferRequest.getDestinationAccountNumber());
+        boolean isDestinationAccountExists = accountRepository.existsByAccountNumber(transferRequest.getDestinationAccountNumber());
         if(!isDestinationAccountExists) {
             throw new ResourceNotFoundException("Account not found with account number: " + transferRequest.getDestinationAccountNumber());
         }
 
         // Check if the amount debited is not more than the current balance
-        User sourceAccount = userRepository.findByAccountNumber(transferRequest.getSourceAccountNumber());
+        Account sourceAccount = accountRepository.findByAccountNumber(transferRequest.getSourceAccountNumber());
 
-        if(transferRequest.getAmount().compareTo(sourceAccount.getAccountBalance()) > 0) {
+        if(transferRequest.getAmount().compareTo(sourceAccount.getBalance()) > 0) {
             throw new InsufficientBalanceException("Insufficient Balance: "
                     + transferRequest.getAmount());
         }
 
         // Debit amount
-        BigDecimal currentSourceAccountBalance = sourceAccount.getAccountBalance();
-        sourceAccount.setAccountBalance(currentSourceAccountBalance.subtract(transferRequest.getAmount()));
-        userRepository.save(sourceAccount);
+        BigDecimal currentSourceAccountBalance = sourceAccount.getBalance();
+        sourceAccount.setBalance(currentSourceAccountBalance.subtract(transferRequest.getAmount()));
+        accountRepository.save(sourceAccount);
 
         // Save Transaction
-        transactionService.saveTransaction(buildTransactionDto(sourceAccount.getAccountNumber(), "DEBIT",
+        transactionService.saveTransaction(buildTransactionRequest(sourceAccount, "DEBIT",
                 transferRequest.getAmount(), reference, transferRequest.getDestinationAccountNumber()));
 
         // Send Debit Amount Email Alert
@@ -314,16 +320,17 @@ public class UserServiceImpl implements UserService {
 //        emailService.sendEmailAlert(debitAlert);
 
         // Get the account to credit
-        User destinationAccount = userRepository.findByAccountNumber(transferRequest.getDestinationAccountNumber());
-        BigDecimal currentDestinationAccountBalance = destinationAccount.getAccountBalance();
+        Account destinationAccount = accountRepository.findByAccountNumber(transferRequest.getDestinationAccountNumber());
+
+        BigDecimal currentDestinationAccountBalance = destinationAccount.getBalance();
 
         // Credit the amount
-        destinationAccount.setAccountBalance(currentDestinationAccountBalance.add(transferRequest.getAmount()));
-        userRepository.save(destinationAccount);
+        destinationAccount.setBalance(currentDestinationAccountBalance.add(transferRequest.getAmount()));
+        accountRepository.save(destinationAccount);
 
         // Save Transaction
 
-        transactionService.saveTransaction(buildTransactionDto(destinationAccount.getAccountNumber(), "CREDIT",
+        transactionService.saveTransaction(buildTransactionRequest(destinationAccount, "CREDIT",
                 transferRequest.getAmount(), reference, transferRequest.getSourceAccountNumber()));
 
         // Send Credit Amount Email Alert
@@ -350,14 +357,14 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.joining(" "));
     }
 
-    private TransactionResponse buildTransactionDto(String accountNumber, String type, BigDecimal amount, String reference
+    private TransactionRequest buildTransactionRequest(Account account, String type, BigDecimal amount, String reference
             , String source) {
-        return TransactionResponse.builder()
+        return TransactionRequest.builder()
                 .transactionReference(reference)
-                .accountNumber(accountNumber)
+                .account(account)
                 .transactionType(type)
                 .amount(amount)
-                .counterpartySource(source)
+                .counterpartyAccountNumber(source)
                 .build();
     }
 }

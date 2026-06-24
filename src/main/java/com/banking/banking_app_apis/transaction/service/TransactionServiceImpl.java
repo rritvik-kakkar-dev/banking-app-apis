@@ -1,5 +1,6 @@
 package com.banking.banking_app_apis.transaction.service;
 
+import com.banking.banking_app_apis.transaction.dto.TransactionRequest;
 import com.banking.banking_app_apis.transaction.dto.TransactionResponse;
 import com.banking.banking_app_apis.transaction.entity.Transaction;
 import com.banking.banking_app_apis.transaction.repository.TransactionRepository;
@@ -22,13 +23,13 @@ public class TransactionServiceImpl implements TransactionService {
     TransactionRepository transactionRepository;
 
     @Override
-    public Transaction saveTransaction(TransactionResponse transactionResponse) {
+    public Transaction saveTransaction(TransactionRequest request) {
         Transaction transaction = Transaction.builder()
-                .transactionReference(transactionResponse.getTransactionReference())
-                .transactionType(transactionResponse.getTransactionType())
-                .accountNumber(transactionResponse.getAccountNumber())
-                .amount(transactionResponse.getAmount())
-                .counterPartySource(transactionResponse.getCounterpartySource())
+                .transactionReference(request.getTransactionReference())
+                .transactionType(request.getTransactionType())
+                .accountNumber(request.getAccount().getAccountNumber())
+                .amount(request.getAmount())
+                .counterPartySource(request.getCounterpartyAccountNumber())
                 .status("SUCCESS")
                 .build();
 
@@ -64,19 +65,23 @@ public class TransactionServiceImpl implements TransactionService {
                 .collect(Collectors.toMap(
                         Transaction::getTransactionReference,
                         Transaction::getAccountNumber,
-                        (existing, replacement) -> existing // keep first if duplicate
+                        (existing, replacement) -> existing
                 ));
 
-        return transactions.map(transaction -> TransactionResponse.builder()
-                .transactionReference(transaction.getTransactionReference())
-                .transactionType(transaction.getTransactionType())
-                .amount(transaction.getAmount())
-                .accountNumber(transaction.getAccountNumber())
-                .counterpartySource(transaction.getCounterPartySource())
-                .status(transaction.getStatus())
-                .createdAt(transaction.getCreatedAt())
-                .transactionId(transaction.getTransactionId())
-                .build());
+        return transactions.map(transaction ->
+                TransactionResponse.builder()
+                        .transactionId(transaction.getTransactionId())
+                        .transactionReference(transaction.getTransactionReference())
+                        .transactionType(transaction.getTransactionType())
+                        .amount(transaction.getAmount())
+                        .accountNumber(transaction.getAccountNumber())
+                        .counterpartyAccountNumber(
+                                counterpartyMap.get(transaction.getTransactionReference())
+                        )
+                        .status(transaction.getStatus())
+                        .createdAt(transaction.getCreatedAt())
+                        .build()
+        );
     }
 
 
