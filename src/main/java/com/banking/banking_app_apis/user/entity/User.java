@@ -1,5 +1,6 @@
 package com.banking.banking_app_apis.user.entity;
 
+import com.banking.banking_app_apis.account.entity.Account;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -8,7 +9,6 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -40,9 +40,8 @@ public class User implements UserDetails {
     private String phoneNumber;
     private String alternativePhoneNumber;
 
-    @Column(unique = true)
-    private String accountNumber;
-    private BigDecimal accountBalance;
+    @OneToMany(mappedBy = "user")
+    private List<Account> accounts;
 
     private String status;
 
