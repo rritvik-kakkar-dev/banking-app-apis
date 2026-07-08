@@ -16,6 +16,6 @@ public class CreditDebitRequest {
 
     private String accountNumber;
     private BigDecimal amount;
-    private String source;
-    private String destination;
+    private String sourceDescription;
+    private String destinationDescription;
 }
