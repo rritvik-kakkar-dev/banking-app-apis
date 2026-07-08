@@ -1,14 +1,21 @@
 package com.banking.banking_app_apis.service;
 
-import com.banking.banking_app_apis.dto.*;
-import com.banking.banking_app_apis.entity.Role;
-import com.banking.banking_app_apis.entity.User;
-import com.banking.banking_app_apis.exception.DuplicateAccountException;
-import com.banking.banking_app_apis.exception.InsufficientBalanceException;
-import com.banking.banking_app_apis.exception.ResourceNotFoundException;
-import com.banking.banking_app_apis.repository.UserRepository;
-import com.banking.banking_app_apis.service.impl.UserServiceImpl;
-import com.banking.banking_app_apis.utils.AccountUtils;
+import com.banking.banking_app_apis.account.constants.AccountConstants;
+import com.banking.banking_app_apis.account.dto.CreditDebitRequest;
+import com.banking.banking_app_apis.account.dto.EnquiryRequest;
+import com.banking.banking_app_apis.account.dto.TransferRequest;
+import com.banking.banking_app_apis.common.dto.BankResponse;
+import com.banking.banking_app_apis.common.exception.DuplicateAccountException;
+import com.banking.banking_app_apis.common.exception.InsufficientBalanceException;
+import com.banking.banking_app_apis.common.exception.ResourceNotFoundException;
+import com.banking.banking_app_apis.notification.dto.EmailDetails;
+import com.banking.banking_app_apis.notification.service.EmailService;
+import com.banking.banking_app_apis.transaction.service.TransactionService;
+import com.banking.banking_app_apis.user.dto.UpdateUserRequest;
+import com.banking.banking_app_apis.user.entity.Role;
+import com.banking.banking_app_apis.user.entity.User;
+import com.banking.banking_app_apis.user.repository.UserRepository;
+import com.banking.banking_app_apis.user.service.UserServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -80,8 +87,8 @@ class UserServiceImplTest {
         // WHEN
         BankResponse response = userService.balanceEnquiry(request);
 
-        assertThat(response.getResponseCode()).isEqualTo(AccountUtils.ACCOUNT_FOUND_CODE);
-        assertThat(response.getAccountInfo().getAccountBalance()).isEqualTo(BigDecimal.valueOf(50000));
+        assertThat(response.getResponseCode()).isEqualTo(AccountConstants.ACCOUNT_FOUND_CODE);
+        assertThat(response.getAccountSummaryResponse().getAccountBalance()).isEqualTo(BigDecimal.valueOf(50000));
     }
 
 
@@ -123,7 +130,7 @@ class UserServiceImplTest {
 
         BankResponse response = userService.creditAmount(request);
 
-        assertThat(response.getResponseCode()).isEqualTo(AccountUtils.ACCOUNT_CREDITED_SUCCESS_CODE);
+        assertThat(response.getResponseCode()).isEqualTo(AccountConstants.ACCOUNT_CREDITED_SUCCESS_CODE);
         assertThat(mockUser.getAccountBalance()).isEqualTo(BigDecimal.valueOf(60000));
         verify(userRepository, times(1)).save(any(User.class));
     }
@@ -193,7 +200,7 @@ class UserServiceImplTest {
 
         BankResponse response = userService.debitAmount(request);
 
-        assertThat(response.getResponseCode()).isEqualTo(AccountUtils.ACCOUNT_DEBITED_SUCCESS_CODE);
+        assertThat(response.getResponseCode()).isEqualTo(AccountConstants.ACCOUNT_DEBITED_SUCCESS_CODE);
         assertThat(mockUser.getAccountBalance()).isEqualTo(BigDecimal.valueOf(40000));
         verify(userRepository, times(1)).save(any(User.class));
     }
@@ -287,7 +294,7 @@ class UserServiceImplTest {
 
         BankResponse response = userService.transfer(request);
 
-        assertThat(response.getResponseCode()).isEqualTo(AccountUtils.TRANSFER_SUCCESS_CODE);
+        assertThat(response.getResponseCode()).isEqualTo(AccountConstants.TRANSFER_SUCCESS_CODE);
         assertThat(mockUser.getAccountBalance()).isEqualTo(BigDecimal.valueOf(49000));
         verify(userRepository, times(2)).save(any(User.class));
         assertThat(mockDestinationUser.getAccountBalance()).isEqualTo(BigDecimal.valueOf(21000));
@@ -300,7 +307,7 @@ class UserServiceImplTest {
     @Test
     void shouldThrowDuplicateAccountExceptionWhenEmailExists() {
         // GIVEN
-        UserRequest request = new UserRequest();
+        UpdateUserRequest request = new UpdateUserRequest();
         request.setEmail("rritvik98kakkar@gmail.com");
 
         when(userRepository.existsByEmail("rritvik98kakkar@gmail.com")).thenReturn(true);
@@ -314,7 +321,7 @@ class UserServiceImplTest {
     @Test
     void shouldCreateUserAndSendEmailWhenEmailDoesNotExists() {
         // GIVEN
-        UserRequest request = new UserRequest();
+        UpdateUserRequest request = new UpdateUserRequest();
         request.setEmail("rritvik981kakkar@gmail.com");
 
         when(userRepository.existsByEmail("rritvik981kakkar@gmail.com")).thenReturn(false);
@@ -335,7 +342,7 @@ class UserServiceImplTest {
         BankResponse response = userService.createAccount(request);
 
         // THEN
-        assertThat(response.getResponseCode()).isEqualTo(AccountUtils.ACCOUNT_CREATION_SUCCESS_CODE);
+        assertThat(response.getResponseCode()).isEqualTo(AccountConstants.ACCOUNT_CREATION_SUCCESS_CODE);
         verify(userRepository, times(1)).save(any(User.class));
         verify(emailService, times(1)).sendEmailAlert(any(EmailDetails.class));
     }

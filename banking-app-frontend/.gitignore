@@ -22,4 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+<<<<<<< HEAD
 *.vite
+=======
+*.vite
+>>>>>>> 7de608897a8d9dc79259098c65d951077feb7f4b
