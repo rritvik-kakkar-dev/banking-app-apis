@@ -4,7 +4,10 @@ import com.banking.banking_app_apis.loan.entity.EmiFrequency;
 import com.banking.banking_app_apis.loan.entity.InterestType;
 import com.banking.banking_app_apis.loan.entity.LoanStatus;
 import com.banking.banking_app_apis.loan.entity.LoanType;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -13,7 +16,7 @@ import java.time.LocalDate;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class LoanResponse {
+public class LoanDetailResponse {
 
     private Long id;
     private String name;
@@ -40,6 +43,7 @@ public class LoanResponse {
     private BigDecimal processingFee;
     private BigDecimal insuranceAmount;
     private BigDecimal preClosureAmount;
-    private String linkedAccountNumber;
+    private String accountNumber;
+    private String accountName;
 
 }

@@ -1,6 +1,6 @@
 package com.banking.banking_app_apis.budget.entity;
 
-import com.banking.banking_app_apis.user.entity.User;
+import com.banking.banking_app_apis.account.entity.Account;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -40,7 +40,7 @@ public class Budget {
 
     @ManyToOne
     @JoinColumn(name = "linked_account_number", referencedColumnName = "accountNumber")
-    private User linkedAccount;
+    private Account linkedAccount;
 
     private boolean alertAt80Percent;
 

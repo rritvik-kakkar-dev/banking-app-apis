@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface LoanScheduleRepository extends JpaRepository<LoanSchedule, Long> {
 
@@ -17,4 +18,6 @@ public interface LoanScheduleRepository extends JpaRepository<LoanSchedule, Long
     List<LoanSchedule> findByLoanIdAndStatus(Long loanId, PaymentStatus status);
 
     List<LoanSchedule> findByDueDateBetweenAndStatus(LocalDate from, LocalDate to, PaymentStatus status);
+
+    Optional<LoanSchedule> findByLoanAndMonthAndYear(Loan loan, Integer month, Integer year);
 }

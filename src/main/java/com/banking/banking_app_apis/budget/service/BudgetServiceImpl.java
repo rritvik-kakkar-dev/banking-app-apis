@@ -1,21 +1,25 @@
 package com.banking.banking_app_apis.budget.service;
 
 import com.banking.banking_app_apis.account.dto.CreditDebitRequest;
+import com.banking.banking_app_apis.account.dto.TransactionResponse;
+import com.banking.banking_app_apis.account.entity.Account;
+import com.banking.banking_app_apis.account.repository.AccountRepository;
+import com.banking.banking_app_apis.account.service.AccountService;
 import com.banking.banking_app_apis.budget.dto.*;
 import com.banking.banking_app_apis.budget.entity.*;
 import com.banking.banking_app_apis.budget.repository.BudgetGroupRepository;
 import com.banking.banking_app_apis.budget.repository.BudgetRepository;
 import com.banking.banking_app_apis.budget.repository.CategoryRepository;
 import com.banking.banking_app_apis.budget.repository.ExpenseRepository;
-import com.banking.banking_app_apis.common.dto.BankResponse;
 import com.banking.banking_app_apis.common.exception.ResourceNotFoundException;
 import com.banking.banking_app_apis.common.exception.ValidationException;
 import com.banking.banking_app_apis.notification.dto.EmailDetails;
 import com.banking.banking_app_apis.notification.service.EmailService;
 import com.banking.banking_app_apis.transaction.service.TransactionService;
+import com.banking.banking_app_apis.user.entity.User;
 import com.banking.banking_app_apis.user.repository.UserRepository;
 import com.banking.banking_app_apis.user.service.UserService;
-import com.banking.banking_app_apis.user.entity.User;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -31,6 +35,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Service
+@RequiredArgsConstructor
 public class BudgetServiceImpl implements BudgetService {
 
     @Autowired
@@ -56,6 +61,9 @@ public class BudgetServiceImpl implements BudgetService {
 
     @Autowired
     private TransactionService transactionService;
+
+    private final AccountService accountService;
+    private final AccountRepository accountRepository;
 
 
     @Override
@@ -108,10 +116,10 @@ public class BudgetServiceImpl implements BudgetService {
             CreditDebitRequest request = CreditDebitRequest.builder()
                     .accountNumber(accountNumbersByBudgetId.get(expense.getBudget().getId()))
                     .amount(expense.getAmount())
-                    .source("Budget Group Deletion Refund")
+                    .sourceDescription("Budget Group Deletion Refund")
                     .build();
 
-            userService.creditAmount(request);
+            accountService.credit(request);
         }
 
         expenseRepository.deleteAll(expenses);
@@ -258,12 +266,7 @@ public class BudgetServiceImpl implements BudgetService {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("No Category found with this ID: " + request.getCategoryId()));
 
-        boolean isLinkedAccountUserExists = userRepository.existsByAccountNumber(request.getLinkedAccountNumber());
-        if(!isLinkedAccountUserExists) {
-            throw new ResourceNotFoundException("No User found with this account number: " + request.getLinkedAccountNumber());
-        }
-
-        User linkedAccountUser = userRepository.findByAccountNumber(request.getLinkedAccountNumber());
+        Account linkedAccount = accountRepository.findByAccountNumber(request.getLinkedAccountNumber()).orElseThrow(() -> new ResourceNotFoundException("No account found with account number: " + request.getLinkedAccountNumber()));
 
         LocalDate[] dates = calculateBudgetDates(request);
 
@@ -274,7 +277,7 @@ public class BudgetServiceImpl implements BudgetService {
                 .period(request.getPeriod())
                 .startDate(dates[0])
                 .endDate(dates[1])
-                .linkedAccount(linkedAccountUser)
+                .linkedAccount(linkedAccount)
                 .alertAt80Percent(true)
                 .build();
 
@@ -331,11 +334,11 @@ public class BudgetServiceImpl implements BudgetService {
         List<Expense> expenses = expenseRepository.findByBudget(budget);
 
         for (Expense expense : expenses) {
-            userService.creditAmount(
+            accountService.credit(
                     CreditDebitRequest.builder()
                             .accountNumber(accountNumber)
                             .amount(expense.getAmount())
-                            .source("Budget Deletion Refund")
+                            .sourceDescription("Budget Deletion Refund")
                             .build()
             );
         }
@@ -354,10 +357,10 @@ public class BudgetServiceImpl implements BudgetService {
         CreditDebitRequest debitRequest = CreditDebitRequest.builder()
                 .accountNumber(budget.getLinkedAccount().getAccountNumber())
                 .amount(request.getAmount())
-                .destination(request.getDescription())
+                .destinationDescription(request.getDescription())
                 .build();
 
-        BankResponse debitResponse = userService.debitAmount(debitRequest);
+        TransactionResponse debitResponse = accountService.debit(debitRequest);
 
         Expense expense = Expense.builder()
                 .budget(budget)

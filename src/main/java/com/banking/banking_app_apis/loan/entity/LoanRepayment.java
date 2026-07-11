@@ -1,6 +1,6 @@
 package com.banking.banking_app_apis.loan.entity;
 
-import com.banking.banking_app_apis.entity.Transaction;
+import com.banking.banking_app_apis.transaction.entity.Transaction;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

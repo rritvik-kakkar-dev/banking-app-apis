@@ -237,7 +237,7 @@ public class AccountServiceImpl implements AccountService {
                 .collect(Collectors.joining(" "));
     }
 
-    private TransactionRequest buildTransactionRequest(Account account, String type, BigDecimal amount, String reference
+    public static TransactionRequest buildTransactionRequest(Account account, String type, BigDecimal amount, String reference
             , String source) {
         return TransactionRequest.builder()
                 .transactionReference(reference)

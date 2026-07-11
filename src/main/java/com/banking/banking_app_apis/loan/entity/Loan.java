@@ -1,6 +1,7 @@
 package com.banking.banking_app_apis.loan.entity;
 
-import com.banking.banking_app_apis.entity.User;
+import com.banking.banking_app_apis.account.entity.Account;
+import com.banking.banking_app_apis.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -69,8 +70,8 @@ public class Loan {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "account_number")
-    private String linkedAccount;
+    @JoinColumn(name = "account_id")
+    private Account account;
 
     @OneToMany(mappedBy = "loan",
             cascade = CascadeType.ALL,

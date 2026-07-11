@@ -1,12 +1,14 @@
 package com.banking.banking_app_apis.transaction.service;
 
+import com.banking.banking_app_apis.account.entity.Account;
+import com.banking.banking_app_apis.account.repository.AccountRepository;
+import com.banking.banking_app_apis.common.exception.ResourceNotFoundException;
 import com.banking.banking_app_apis.notification.dto.EmailDetails;
+import com.banking.banking_app_apis.notification.service.EmailService;
 import com.banking.banking_app_apis.transaction.dto.TransactionResponse;
 import com.banking.banking_app_apis.transaction.entity.Transaction;
-import com.banking.banking_app_apis.user.entity.User;
 import com.banking.banking_app_apis.transaction.repository.TransactionRepository;
-import com.banking.banking_app_apis.user.repository.UserRepository;
-import com.banking.banking_app_apis.notification.service.EmailService;
+import com.banking.banking_app_apis.user.entity.User;
 import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfPTable;
@@ -31,9 +33,9 @@ import java.util.List;
 @Slf4j
 public class BankStatementImpl implements BankService {
 
-    private TransactionRepository transactionRepository;
-    private UserRepository userRepository;
-    private EmailService emailService;
+    private final AccountRepository accountRepository;
+    private final TransactionRepository transactionRepository;
+    private final EmailService emailService;
 
     private static final String FILE = "/Users/yomama/Documents/Development/Spring Boot/Banking App Pdfs/MyStatement.pdf";
 
@@ -55,10 +57,16 @@ public class BankStatementImpl implements BankService {
         LocalDate start = LocalDate.parse(startDate, DateTimeFormatter.ISO_DATE);
         LocalDate end = LocalDate.parse(endDate, DateTimeFormatter.ISO_DATE);
 
-        User userAccount = userRepository.findByAccountNumber(accountNumber);
-        String customerName = userAccount.getFirstName() + " "
-                + userAccount.getLastName()
-                + (userAccount.getOtherName() != null ? " " + userAccount.getOtherName() : "");
+        Account account = accountRepository.findByAccountNumber(accountNumber)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "No account found with account number: " + accountNumber));
+
+        User user = account.getUser();
+
+        String customerName = user.getFirstName()
+                + " "
+                + user.getLastName();
 
         // Old way without paagination and sorting
 //        List<Transaction> transactionList = transactionRepository.findAll().stream()
@@ -127,7 +135,9 @@ public class BankStatementImpl implements BankService {
         PdfPCell space = new PdfPCell();
         space.setBorder(0);
 
-        PdfPCell address = new PdfPCell(new Phrase("Customer Address: " + userAccount.getAddress()));
+        PdfPCell address = new PdfPCell(
+                new Phrase("Customer Address: " + user.getAddress())
+        );
         address.setBorder(0);
 
         statementInfoTable.addCell(customerInfo);
@@ -178,7 +188,7 @@ public class BankStatementImpl implements BankService {
 
         // Send Statement as an email attachment
         EmailDetails emailDetails = EmailDetails.builder()
-                .recipient(userAccount.getEmail())
+                .recipient(user.getEmail())
                 .subject("STATEMENT OF ACCOUNT")
                 .messageBody("Kindly find your requested account statement attached!")
                 .attachment(FILE)

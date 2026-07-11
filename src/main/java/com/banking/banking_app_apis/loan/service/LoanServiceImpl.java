@@ -1,137 +1,64 @@
 package com.banking.banking_app_apis.loan.service;
 
-import com.banking.banking_app_apis.dto.CreateLoanRequest;
-import com.banking.banking_app_apis.loan.dto.LoanResponse;
+import com.banking.banking_app_apis.account.dto.CreditDebitRequest;
+import com.banking.banking_app_apis.account.dto.TransactionResponse;
+import com.banking.banking_app_apis.account.entity.Account;
+import com.banking.banking_app_apis.account.repository.AccountRepository;
+import com.banking.banking_app_apis.account.service.AccountService;
+import com.banking.banking_app_apis.common.exception.ResourceNotFoundException;
+import com.banking.banking_app_apis.common.exception.ValidationException;
+import com.banking.banking_app_apis.loan.dto.*;
 import com.banking.banking_app_apis.loan.entity.*;
-import com.banking.banking_app_apis.entity.*;
-import com.banking.banking_app_apis.exception.ResourceNotFoundException;
-import com.banking.banking_app_apis.exception.ValidationException;
+import com.banking.banking_app_apis.loan.mapper.LoanMapper;
 import com.banking.banking_app_apis.loan.repository.LoanRepaymentRepository;
 import com.banking.banking_app_apis.loan.repository.LoanRepository;
 import com.banking.banking_app_apis.loan.repository.LoanScheduleRepository;
-import com.banking.banking_app_apis.repository.UserRepository;
+import com.banking.banking_app_apis.loan.util.LoanCalculationResult;
+import com.banking.banking_app_apis.loan.util.LoanCalculator;
+import com.banking.banking_app_apis.loan.util.LoanScheduleGenerator;
+import com.banking.banking_app_apis.transaction.entity.Transaction;
+import com.banking.banking_app_apis.transaction.service.TransactionService;
+import com.banking.banking_app_apis.user.entity.User;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
+import java.util.UUID;
 
+import static com.banking.banking_app_apis.account.service.AccountServiceImpl.buildTransactionRequest;
+
+@RequiredArgsConstructor
 @Service
+@Transactional
 public class LoanServiceImpl implements LoanService {
 
-    @Autowired
-    private LoanRepository loanRepository;
+    private final LoanRepository loanRepository;
+    private final LoanScheduleRepository loanScheduleRepository;
+    private final LoanRepaymentRepository loanRepaymentRepository;
+    private final AccountRepository accountRepository;
 
-    @Autowired
-    private LoanScheduleRepository loanScheduleRepository;
+    private final LoanCalculator loanCalculator;
+    private final LoanScheduleGenerator loanScheduleGenerator;
+    private final LoanMapper loanMapper;
 
-    @Autowired
-    private LoanRepaymentRepository loanRepaymentRepository;
-
-    @Autowired
-    private UserRepository userRepository;
+    private final AccountService accountService;
+    private final TransactionService transactionService;
 
 
-    @Transactional
     @Override
-    public LoanResponse createLoan(CreateLoanRequest request, User currentUser) {
+    public LoanDetailResponse createLoan(CreateLoanRequest request, User currentUser) {
 
-        User user = userRepository.findByAccountNumber(request.getLinkedAccountNumber());
-        if(user == null) {
-            throw new ResourceNotFoundException("No user found with the account number: " + request.getLinkedAccountNumber());
-        }
+        Account account = getCurrentUserAccount(currentUser);
 
-        if(!Objects.equals(user.getId(), currentUser.getId())) {
-            throw new ValidationException("You cannot create loan entry for another user!");
-        }
-
-        BigDecimal annualInterestRate = request.getAnnualInterest();
-        BigDecimal loanAmount = request.getPrincipal();
-        int tenureYears = request.getTenure();
-
-        BigDecimal interestRate = BigDecimal.ZERO;
-        int totalEmis = 0;
-
-        // Loan End Date
-        LocalDate startDate = request.getStartDate();
-        LocalDate nextEmiDate = startDate;
-
-        if (request.getEmiFrequency() == EmiFrequency.MONTHLY) {
-            interestRate = annualInterestRate.divide(BigDecimal.valueOf(1200), 10, RoundingMode.HALF_UP);
-            totalEmis = tenureYears * 12;
-        } else if (request.getEmiFrequency() == EmiFrequency.QUARTERLY) {
-            interestRate = annualInterestRate.divide(BigDecimal.valueOf(400), 10, RoundingMode.HALF_UP);
-            totalEmis = tenureYears * 4;
-        } else if (request.getEmiFrequency() == EmiFrequency.YEARLY) {
-            interestRate = annualInterestRate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP);
-            totalEmis = tenureYears;
-        }
-
-        LocalDate endDate = calculateDueDate(startDate, totalEmis, request.getEmiFrequency());
-
-        // Calculate EMI Amount based on Interest Type
-        BigDecimal emiAmount;
-        BigDecimal totalPayableAmount;
-        BigDecimal totalInterestAmount;
-
-        switch (request.getInterestType()) {
-
-            case REDUCING -> {
-
-                emiAmount = calculateReducingEmi(
-                        interestRate,
-                        totalEmis,
-                        loanAmount
-                );
-
-                totalPayableAmount = emiAmount.multiply(
-                        BigDecimal.valueOf(totalEmis));
-
-                totalInterestAmount = totalPayableAmount.subtract(loanAmount);
-            }
-
-            case FIXED -> {
-
-                BigDecimal totalInterest = loanAmount
-                        .multiply(annualInterestRate)
-                        .multiply(BigDecimal.valueOf(tenureYears))
-                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-
-                totalPayableAmount = loanAmount.add(totalInterest);
-
-                totalInterestAmount = totalInterest;
-
-                emiAmount = totalPayableAmount.divide(
-                        BigDecimal.valueOf(totalEmis),
-                        2,
-                        RoundingMode.HALF_UP
-                );
-            }
-
-            case FLOATING -> {
-
-                // For now, treat floating same as reducing.
-                // Later interest rate changes can regenerate schedules.
-
-                emiAmount = calculateReducingEmi(
-                        interestRate,
-                        totalEmis,
-                        loanAmount
-                );
-
-                totalPayableAmount = emiAmount.multiply(
-                        BigDecimal.valueOf(totalEmis));
-
-                totalInterestAmount = totalPayableAmount.subtract(loanAmount);
-            }
-
-            default -> throw new ValidationException("Invalid interest type");
-        }
+        LoanCalculationResult calculation =
+                loanCalculator.calculate(request);
 
         // Loan Builder
         Loan loan = Loan.builder()
@@ -139,170 +66,225 @@ public class LoanServiceImpl implements LoanService {
                 .loanSource(request.getLoanSource())
                 .loanAccountNumber(request.getLoanAccountNumber())
                 .loanType(request.getLoanType())
-                .principal(loanAmount)
-                .annualInterest(annualInterestRate)
-                .tenure(tenureYears)
+                .startDate(request.getStartDate())
+                .nextEmiDate(calculation.getNextEmiDate())
+                .principal(request.getPrincipal())
+                .annualInterest(request.getAnnualInterest())
+                .tenure(request.getTenure())
                 .emiFrequency(request.getEmiFrequency())
                 .interestType(request.getInterestType())
-                .startDate(startDate)
-                .insuranceAmount(
-                        request.getInsuranceAmount() == null
-                                ? BigDecimal.ZERO
-                                : request.getInsuranceAmount()
-                )
-                .processingFee(
-                        request.getProcessingFee() == null
-                                ? BigDecimal.ZERO
-                                : request.getProcessingFee()
-                )
+                .insuranceAmount(defaultZero(request.getInsuranceAmount()))
+                .processingFee(defaultZero(request.getProcessingFee()))
                 .autoDebitEnabled(request.getAutoDebitEnabled())
-                .linkedAccount(user.getAccountNumber())
-                .emiAmount(emiAmount)
-                .totalPayableAmount(totalPayableAmount)
-                .totalInterest(totalInterestAmount)
-                .outstandingAmount(loanAmount)
-                .endDate(endDate)
-                .nextEmiDate(nextEmiDate)
-                .emiPaid(0)
-                .emiPending(totalEmis)
-                .status(LoanStatus.ACTIVE)
+                .account(account)
                 .user(currentUser)
+                .emiPaid(0)
+                .status(LoanStatus.ACTIVE)
+                .emiAmount(calculation.getEmiAmount())
+                .totalInterest(calculation.getTotalInterest())
+                .totalPayableAmount(calculation.getTotalPayable())
+                .outstandingAmount(request.getPrincipal())
+                .endDate(calculation.getEndDate())
+                .emiPending(calculation.getTotalEmis())
                 .build();
 
         Loan savedLoan = loanRepository.save(loan);
 
-        List<LoanSchedule> schedules = generateSchedules(savedLoan, interestRate, totalEmis);
+        List<LoanSchedule> schedules =
+                loanScheduleGenerator.generate(
+                        savedLoan,
+                        calculation
+                );
 
         loanScheduleRepository.saveAll(schedules);
 
-        return mapToLoanResponse(savedLoan);
+        return loanMapper.toResponse(savedLoan);
     }
 
+    @Override
+    public LoanDetailResponse getLoan(Long id, User currentUser) {
+        Account account = getCurrentUserAccount(currentUser);
 
-    private BigDecimal calculateReducingEmi(BigDecimal interestRate, int totalEmis, BigDecimal loanAmount) {
+        Loan loan = loanRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Not able to find Loan with id " + id));
 
-        if (interestRate.compareTo(BigDecimal.ZERO) == 0) {
-            return loanAmount.divide(
-                    BigDecimal.valueOf(totalEmis),
-                    2,
-                    RoundingMode.HALF_UP
-            );
-        }
-
-        BigDecimal interestFactor = interestRate.add(BigDecimal.ONE)
-                .pow(totalEmis);
-
-        BigDecimal totalAmountWithInterest = loanAmount
-                .multiply(interestRate)
-                .multiply(interestFactor);
-
-        BigDecimal divisor = interestFactor.subtract(BigDecimal.ONE);
-
-        BigDecimal emiAmount = totalAmountWithInterest.divide(
-                divisor,
-                2,
-                RoundingMode.HALF_UP
-        );
-
-        return emiAmount;
-    }
-
-    private LocalDate calculateDueDate(LocalDate startDate, int emiNumber, EmiFrequency frequency) {
-
-        return switch (frequency) {
-            case MONTHLY ->
-                    startDate.plusMonths(emiNumber - 1L);
-            case QUARTERLY ->
-                    startDate.plusMonths((emiNumber - 1L) * 3L);
-            case YEARLY ->
-                    startDate.plusYears(emiNumber - 1L);
-        };
-    }
-
-
-    private List<LoanSchedule> generateSchedules(Loan loan, BigDecimal interestRate, int totalEmis) {
-        List<LoanSchedule> schedules = new ArrayList<>();
-
-        BigDecimal outstandingBalance = loan.getPrincipal();
-        BigDecimal emiAmount = loan.getEmiAmount();
-
-        for (int emiMonth = 1; emiMonth <= totalEmis; emiMonth++) {
-
-            // Interest for current EMI
-            BigDecimal interestComponent = outstandingBalance
-                    .multiply(interestRate)
-                    .setScale(2, RoundingMode.HALF_UP);
-
-            // Principal part of EMI
-            BigDecimal principalComponent = emiAmount
-                    .subtract(interestComponent)
-                    .setScale(2, RoundingMode.HALF_UP);
-
-            // Last EMI adjustment
-            if (emiMonth == totalEmis) {
-                principalComponent = outstandingBalance;
-            }
-
-            BigDecimal lastEmi =
-                    principalComponent.add(interestComponent);
-
-            // Remaining balance
-            outstandingBalance = outstandingBalance
-                    .subtract(principalComponent)
-                    .max(BigDecimal.ZERO);
-
-            LocalDate dueDate = calculateDueDate(loan.getStartDate(), emiMonth, loan.getEmiFrequency());
-
-            LoanSchedule schedule = LoanSchedule.builder()
-                    .loan(loan)
-                    .emiNumber(emiMonth)
-                    .dueDate(dueDate)
-                    .month(dueDate.getMonthValue())
-                    .year(dueDate.getYear())
-                    .principalComponent(principalComponent)
-                    .interestComponent(interestComponent)
-                    .balanceAfterPayment(outstandingBalance)
-                    .penaltyAmount(BigDecimal.ZERO)
-                    .status(PaymentStatus.PENDING)
-                    .emiAmount(emiAmount)
-                    .build();
-
-            schedules.add(schedule);
-        }
-
-        return schedules;
-    }
-
-
-    private LoanResponse mapToLoanResponse(Loan loan) {
-        return LoanResponse.builder()
-                .id(loan.getId())
+        return LoanDetailResponse.builder()
                 .name(loan.getName())
                 .loanSource(loan.getLoanSource())
                 .loanAccountNumber(loan.getLoanAccountNumber())
                 .loanType(loan.getLoanType())
+                .startDate(loan.getStartDate())
+                .nextEmiDate(loan.getNextEmiDate())
                 .principal(loan.getPrincipal())
                 .annualInterest(loan.getAnnualInterest())
                 .tenure(loan.getTenure())
                 .emiFrequency(loan.getEmiFrequency())
                 .interestType(loan.getInterestType())
+                .insuranceAmount(defaultZero(loan.getInsuranceAmount()))
+                .processingFee(defaultZero(loan.getProcessingFee()))
+                .autoDebitEnabled(loan.getAutoDebitEnabled())
+                .accountNumber(account.getAccountNumber())
+                .accountName(account.getAccountName())
+                .emiPaid(0)
+                .status(LoanStatus.ACTIVE)
                 .emiAmount(loan.getEmiAmount())
                 .totalInterest(loan.getTotalInterest())
                 .totalPayableAmount(loan.getTotalPayableAmount())
+                .outstandingAmount(loan.getPrincipal())
+                .endDate(loan.getEndDate())
+                .emiPending(loan.getEmiPending())
+                .build();
+    }
+
+    @Override
+    public LoanScheduleDetailsResponse getLoanSchedule(Long id, User currentUser) {
+        Account account = getCurrentUserAccount(currentUser);
+
+        Loan loan = loanRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("No Loan found with id " + id));
+
+        List<LoanScheduleResponse> schedules =
+                loanScheduleRepository.findByLoanId(loan.getId())
+                        .stream()
+                        .map(loanMapper::toScheduleResponse)
+                        .toList();
+
+        return LoanScheduleDetailsResponse.builder()
+                .loanId(loan.getId())
+                .loanName(loan.getName())
+                .loanAccountNumber(loan.getLoanAccountNumber())
+                .principal(loan.getPrincipal())
                 .outstandingAmount(loan.getOutstandingAmount())
+                .emiAmount(loan.getEmiAmount())
                 .emiPaid(loan.getEmiPaid())
                 .emiPending(loan.getEmiPending())
-                .startDate(loan.getStartDate())
-                .endDate(loan.getEndDate())
-                .nextEmiDate(loan.getNextEmiDate())
-                .closureDate(loan.getClosureDate())
-                .status(loan.getStatus())
-                .autoDebitEnabled(loan.getAutoDebitEnabled())
-                .processingFee(loan.getProcessingFee())
-                .insuranceAmount(loan.getInsuranceAmount())
-                .preClosureAmount(loan.getPreClosureAmount())
-                .linkedAccountNumber(loan.getLinkedAccount())
+                .schedules(schedules)
                 .build();
+    }
+
+    @Override
+    public Page<LoanSummaryResponse> getLoans(User currentUser, int page, int limit, String sortBy, String sortOrder) {
+        Sort sort = sortOrder.equalsIgnoreCase("DESC")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, limit, sort);
+
+        return loanRepository
+                .findByUser(currentUser, pageable)
+                .map(loanMapper::toSummaryResponse);
+    }
+
+    @Override
+    public PayEmiResponse payEmi(Long id, PayEmiRequest request, User currentUser) {
+
+        if (request.getAmount() == null
+                || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Invalid EMI amount.");
+        }
+
+        Account account = getCurrentUserAccount(currentUser);
+
+        if (account.getBalance().compareTo(request.getAmount()) < 0) {
+            throw new ValidationException("Insufficient account balance.");
+        }
+
+        Loan loan = loanRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("No Loan found with ID: " + id));
+
+        if (!loan.getAccount().getId().equals(account.getId())) {
+            throw new ValidationException(
+                    "This loan is linked to a different account."
+            );
+        }
+
+        boolean isOwner = loan.getUser().getId().equals(currentUser.getId());
+
+        if (!isOwner) {
+            throw new ValidationException("You are not the owner of this loan.");
+        }
+
+        if(loan.getStatus() == LoanStatus.CLOSED) {
+            throw new ValidationException("Loan is already closed!!");
+        }
+
+        LoanSchedule loanSchedule = loanScheduleRepository.findByLoanAndMonthAndYear(loan, request.getMonth(), request.getYear()).orElseThrow(() -> new ResourceNotFoundException("No schedule found for loan ID: " + id));
+
+        if (loanSchedule.getStatus() == PaymentStatus.PAID) {
+            throw new ValidationException("EMI for the selected month is already paid.");
+        }
+
+        // Debit Account
+        CreditDebitRequest debitRequest = CreditDebitRequest.builder()
+                .accountNumber(account.getAccountNumber())
+                .amount(request.getAmount())
+                .destinationDescription("Loan payment")
+                .build();
+
+        TransactionResponse debitAmount = accountService.debit(debitRequest);
+
+        // Save Transaction
+        String reference = UUID.randomUUID().toString();
+
+        Transaction transaction = transactionService.saveTransaction(
+                buildTransactionRequest(account, "DEBIT", debitRequest.getAmount(),
+                        reference, debitRequest.getDestinationDescription())
+        );
+
+        // Repayment
+        LoanRepayment loanRepayment = LoanRepayment.builder()
+                .loan(loan)
+                .emiNumber(loanSchedule.getEmiNumber())
+                .amountPaid(request.getAmount())
+                .paymentDate(LocalDate.now())
+                .principalComponent(loanSchedule.getPrincipalComponent())
+                .outstandingBalance(loanSchedule.getBalanceAfterPayment())
+                .interestComponent(loanSchedule.getInterestComponent())
+                .transaction(transaction)
+                .status(PaymentStatus.PAID)
+                .remarks("EMI paid successfully")
+                .build();
+
+        LoanRepayment loanRepaymentSaved = loanRepaymentRepository.save(loanRepayment);
+
+        // Update Loan Schedule
+        loanSchedule.setPaidDate(LocalDate.now());
+        loanSchedule.setStatus(PaymentStatus.PAID);
+        loanScheduleRepository.save(loanSchedule);
+
+        // Update Loan
+        loan.setOutstandingAmount(loanSchedule.getBalanceAfterPayment());
+        loan.setEmiPaid(loan.getEmiPaid() + 1);
+        loan.setEmiPending(loan.getEmiPending() - 1);
+        loanRepository.save(loan);
+
+        return PayEmiResponse.builder()
+                .loanId(loan.getId())
+                .emiNumber(loanSchedule.getEmiNumber())
+                .month(request.getMonth())
+                .year(request.getYear())
+                .amountPaid(request.getAmount())
+                .principalComponent(loanRepayment.getPrincipalComponent())
+                .interestComponent(loanRepayment.getInterestComponent())
+                .outstandingAmount(loanRepayment.getOutstandingBalance())
+                .emiPaid(loan.getEmiPaid())
+                .emiPending(loan.getEmiPending())
+                .paymentDate(loanSchedule.getPaidDate())
+                .nextEmiDate(loanSchedule.getDueDate())
+                .loanStatus(loan.getStatus())
+                .transactionReference(reference)
+                .message("EMI Paid Successfully")
+                .build();
+
+    }
+
+
+    private Account getCurrentUserAccount(User currentUser) {
+
+        return accountRepository.findByUser(currentUser)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("No account found for the current user."));
+    }
+
+    private BigDecimal defaultZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
 }

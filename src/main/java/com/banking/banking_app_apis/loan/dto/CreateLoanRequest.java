@@ -1,4 +1,4 @@
-package com.banking.banking_app_apis.dto;
+package com.banking.banking_app_apis.loan.dto;
 
 import com.banking.banking_app_apis.loan.entity.EmiFrequency;
 import com.banking.banking_app_apis.loan.entity.InterestType;
@@ -51,7 +51,4 @@ public class CreateLoanRequest {
     private BigDecimal insuranceAmount = BigDecimal.ZERO;
 
     private Boolean autoDebitEnabled = false;
-
-    @NotNull
-    private String linkedAccountNumber;
 }
