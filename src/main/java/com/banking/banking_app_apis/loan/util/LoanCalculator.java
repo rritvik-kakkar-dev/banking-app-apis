@@ -108,9 +108,9 @@ public class LoanCalculator {
         return emiAmount;
     }
 
-    public BigDecimal calculateFixedInterest() {
-        return BigDecimal.ZERO;
-    }
+//    public BigDecimal calculateFixedInterest() {
+//        return BigDecimal.ZERO;
+//    }
 
     public BigDecimal calculateInterestRate(
             BigDecimal annualInterest,

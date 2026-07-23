@@ -37,4 +37,6 @@ public final class AccountConstants {
     public static final String TRANSFER_SUCCESS_CODE = "008";
     public static final String TRANSFER_SUCCESS_MESSAGE =
             "Transfer successful!";
+
+    public static final String SUCCESS = "SUCCESS";
 }

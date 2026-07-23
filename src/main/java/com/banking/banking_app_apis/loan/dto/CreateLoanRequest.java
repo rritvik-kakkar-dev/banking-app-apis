@@ -51,4 +51,7 @@ public class CreateLoanRequest {
     private BigDecimal insuranceAmount = BigDecimal.ZERO;
 
     private Boolean autoDebitEnabled = false;
+
+    @NotNull
+    private Long accountId;
 }

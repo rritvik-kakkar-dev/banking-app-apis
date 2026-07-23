@@ -20,4 +20,7 @@ public interface LoanScheduleRepository extends JpaRepository<LoanSchedule, Long
     List<LoanSchedule> findByDueDateBetweenAndStatus(LocalDate from, LocalDate to, PaymentStatus status);
 
     Optional<LoanSchedule> findByLoanAndMonthAndYear(Loan loan, Integer month, Integer year);
+
+    Optional<LoanSchedule> findFirstByLoanAndStatusOrderByDueDateAsc(Loan loan, PaymentStatus status);
+
 }

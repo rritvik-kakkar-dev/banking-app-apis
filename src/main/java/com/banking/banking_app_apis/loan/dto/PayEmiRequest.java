@@ -1,5 +1,6 @@
 package com.banking.banking_app_apis.loan.dto;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -16,4 +17,7 @@ public class PayEmiRequest {
     private Integer year;
 
     private BigDecimal amount;
+
+    @NotNull
+    private Long accountId;
 }

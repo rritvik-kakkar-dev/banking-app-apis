@@ -1,6 +1,5 @@
 package com.banking.banking_app_apis.account.dto;
 
-import com.banking.banking_app_apis.account.entity.AccountStatus;
 import com.banking.banking_app_apis.account.entity.AccountType;
 import com.banking.banking_app_apis.account.entity.CurrencyType;
 import lombok.AllArgsConstructor;
@@ -8,23 +7,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class AccountSummaryResponse {
+public class UpdateAccountRequest {
 
-    private Long id;
     private String accountName;
-    private BigDecimal accountBalance;
-    private String accountNumber;
-    private AccountType accountType;
-    private BigDecimal balance;
-    private CurrencyType currency;
-    private AccountStatus status;
-    private LocalDateTime createdAt;
 
+    private AccountType accountType;
+
+    private CurrencyType currency;
 }

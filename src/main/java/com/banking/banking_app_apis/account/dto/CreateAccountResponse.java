@@ -9,22 +9,20 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Data
 @Builder
-@AllArgsConstructor
 @NoArgsConstructor
-public class AccountSummaryResponse {
+@AllArgsConstructor
+public class CreateAccountResponse {
 
     private Long id;
-    private String accountName;
-    private BigDecimal accountBalance;
     private String accountNumber;
+    private String accountName;
     private AccountType accountType;
     private BigDecimal balance;
     private CurrencyType currency;
     private AccountStatus status;
-    private LocalDateTime createdAt;
-
+    private LocalDate createdAt;
 }

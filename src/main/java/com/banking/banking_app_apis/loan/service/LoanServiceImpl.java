@@ -16,6 +16,7 @@ import com.banking.banking_app_apis.loan.repository.LoanScheduleRepository;
 import com.banking.banking_app_apis.loan.util.LoanCalculationResult;
 import com.banking.banking_app_apis.loan.util.LoanCalculator;
 import com.banking.banking_app_apis.loan.util.LoanScheduleGenerator;
+import com.banking.banking_app_apis.loan.util.LoanValidator;
 import com.banking.banking_app_apis.transaction.entity.Transaction;
 import com.banking.banking_app_apis.transaction.service.TransactionService;
 import com.banking.banking_app_apis.user.entity.User;
@@ -50,12 +51,20 @@ public class LoanServiceImpl implements LoanService {
 
     private final AccountService accountService;
     private final TransactionService transactionService;
+    private final LoanValidator loanValidator;
 
 
     @Override
     public LoanDetailResponse createLoan(CreateLoanRequest request, User currentUser) {
 
-        Account account = getCurrentUserAccount(currentUser);
+        loanValidator.validate(request);
+
+        Account account = accountRepository.findById(request.getAccountId())
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + request.getAccountId()));
+
+        if (!account.getUser().getId().equals(currentUser.getId())) {
+            throw new ValidationException("This account does not belong to you.");
+        }
 
         LoanCalculationResult calculation =
                 loanCalculator.calculate(request);
@@ -103,9 +112,11 @@ public class LoanServiceImpl implements LoanService {
 
     @Override
     public LoanDetailResponse getLoan(Long id, User currentUser) {
-        Account account = getCurrentUserAccount(currentUser);
-
         Loan loan = loanRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Not able to find Loan with id " + id));
+
+        if (!loan.getUser().getId().equals(currentUser.getId())) {
+            throw new ValidationException("You don't have access to this loan.");
+        }
 
         return LoanDetailResponse.builder()
                 .name(loan.getName())
@@ -122,14 +133,14 @@ public class LoanServiceImpl implements LoanService {
                 .insuranceAmount(defaultZero(loan.getInsuranceAmount()))
                 .processingFee(defaultZero(loan.getProcessingFee()))
                 .autoDebitEnabled(loan.getAutoDebitEnabled())
-                .accountNumber(account.getAccountNumber())
-                .accountName(account.getAccountName())
-                .emiPaid(0)
-                .status(LoanStatus.ACTIVE)
+                .accountNumber(loan.getAccount().getAccountNumber())
+                .accountName(loan.getAccount().getAccountName())
+                .emiPaid(loan.getEmiPaid())
+                .status(loan.getStatus())
                 .emiAmount(loan.getEmiAmount())
                 .totalInterest(loan.getTotalInterest())
                 .totalPayableAmount(loan.getTotalPayableAmount())
-                .outstandingAmount(loan.getPrincipal())
+                .outstandingAmount(loan.getOutstandingAmount())
                 .endDate(loan.getEndDate())
                 .emiPending(loan.getEmiPending())
                 .build();
@@ -137,9 +148,12 @@ public class LoanServiceImpl implements LoanService {
 
     @Override
     public LoanScheduleDetailsResponse getLoanSchedule(Long id, User currentUser) {
-        Account account = getCurrentUserAccount(currentUser);
 
         Loan loan = loanRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("No Loan found with id " + id));
+
+        if (!loan.getUser().getId().equals(currentUser.getId())) {
+            throw new ValidationException("You don't have access to this loan.");
+        }
 
         List<LoanScheduleResponse> schedules =
                 loanScheduleRepository.findByLoanId(loan.getId())
@@ -181,7 +195,12 @@ public class LoanServiceImpl implements LoanService {
             throw new ValidationException("Invalid EMI amount.");
         }
 
-        Account account = getCurrentUserAccount(currentUser);
+        Account account = accountRepository.findById(request.getAccountId())
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + request.getAccountId()));
+
+        if (!account.getUser().getId().equals(currentUser.getId())) {
+            throw new ValidationException("This account does not belong to you.");
+        }
 
         if (account.getBalance().compareTo(request.getAmount()) < 0) {
             throw new ValidationException("Insufficient account balance.");
@@ -253,7 +272,19 @@ public class LoanServiceImpl implements LoanService {
         loan.setOutstandingAmount(loanSchedule.getBalanceAfterPayment());
         loan.setEmiPaid(loan.getEmiPaid() + 1);
         loan.setEmiPending(loan.getEmiPending() - 1);
+
+        if (loan.getEmiPending() == 0) {
+            loan.setStatus(LoanStatus.CLOSED);
+            loan.setClosureDate(LocalDate.now());
+        }
+
         loanRepository.save(loan);
+
+        loanScheduleRepository.findFirstByLoanAndStatusOrderByDueDateAsc(loan, PaymentStatus.PENDING)
+                .ifPresent(next -> {
+                    loan.setNextEmiDate(next.getDueDate());
+                    loanRepository.save(loan);
+                });
 
         return PayEmiResponse.builder()
                 .loanId(loan.getId())

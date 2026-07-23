@@ -1,22 +1,31 @@
 package com.banking.banking_app_apis.account.service;
 
+import com.banking.banking_app_apis.account.constants.AccountConstants;
 import com.banking.banking_app_apis.account.dto.*;
 import com.banking.banking_app_apis.account.entity.Account;
 import com.banking.banking_app_apis.account.entity.AccountStatus;
 import com.banking.banking_app_apis.account.entity.AccountType;
 import com.banking.banking_app_apis.account.entity.CurrencyType;
+import com.banking.banking_app_apis.account.mapper.AccountMapper;
 import com.banking.banking_app_apis.account.repository.AccountRepository;
 import com.banking.banking_app_apis.common.exception.InsufficientBalanceException;
 import com.banking.banking_app_apis.common.exception.ResourceNotFoundException;
+import com.banking.banking_app_apis.common.exception.ValidationException;
+import com.banking.banking_app_apis.loan.repository.LoanRepository;
 import com.banking.banking_app_apis.transaction.dto.TransactionRequest;
 import com.banking.banking_app_apis.transaction.entity.Transaction;
 import com.banking.banking_app_apis.transaction.service.TransactionService;
 import com.banking.banking_app_apis.user.entity.User;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -32,8 +41,8 @@ public class AccountServiceImpl implements AccountService {
     private final TransactionService transactionService;
     private final AccountRepository accountRepository;
     private final AccountNumberGenerator accountNumberGenerator;
-
-
+    private final AccountMapper accountMapper;
+    private final LoanRepository loanRepository;
     
     @Override
     public Account createDefaultAccount(User user) {
@@ -57,6 +66,124 @@ public class AccountServiceImpl implements AccountService {
         accountRepository.save(account);
 
         return account;
+    }
+
+    @Override
+    public CreateAccountResponse createAccount(CreateAccountRequest request, User user) {
+
+        Account account = Account.builder()
+                .accountType(request.getAccountType())
+                .accountNumber(request.getAccountNumber())
+                .balance(request.getOpeningBalance())
+                .accountName(request.getAccountName())
+                .currency(CurrencyType.INR)
+                .user(user)
+                .status(AccountStatus.ACTIVE)
+                .build();
+
+        accountRepository.save(account);
+
+        return CreateAccountResponse.builder()
+                .id(account.getId())
+                .accountName(account.getAccountName())
+                .accountType(account.getAccountType())
+                .accountNumber(account.getAccountNumber())
+                .balance(account.getBalance())
+                .currency(account.getCurrency())
+                .status(account.getStatus())
+                .createdAt(LocalDate.now())
+                .build();
+    }
+
+    @Override
+    public Page<AccountSummaryResponse> getAccounts(User currentUser, int page, int limit, String sortBy, String sortOrder) {
+        Sort sort = sortOrder.equalsIgnoreCase("DESC")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, limit, sort);
+
+        return accountRepository
+                .findByUser(currentUser, pageable)
+                .map(accountMapper::toSummaryResponse);
+    }
+
+    @Override
+    public AccountSummaryResponse getAccount(Long id, User currentUser) {
+
+        Account account = accountRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("No Account found with ID: " + id));
+
+        return AccountSummaryResponse.builder()
+                .id(id)
+                .accountNumber(account.getAccountNumber())
+                .accountName(account.getAccountName())
+                .accountType(account.getAccountType())
+                .balance(account.getBalance())
+                .currency(account.getCurrency())
+                .status(account.getStatus())
+                .createdAt(account.getCreatedAt())
+                .build();
+    }
+
+    @Override
+    public AccountSummaryResponse updateAccount(Long id, UpdateAccountRequest request, User currentUser) {
+        Account account = accountRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("No Account found with ID: " + id));
+
+        if(!account.getUser().equals(currentUser)) {
+            throw new ValidationException("Only account owner can update the account details");
+        }
+
+        account.setAccountName(request.getAccountName());
+        account.setAccountType(request.getAccountType());
+        account.setCurrency(request.getCurrency());
+
+        accountRepository.save(account);
+
+        return AccountSummaryResponse.builder()
+                .id(account.getId())
+                .accountNumber(account.getAccountNumber())
+                .accountName(account.getAccountName())
+                .accountType(account.getAccountType())
+                .balance(account.getBalance())
+                .currency(account.getCurrency())
+                .status(account.getStatus())
+                .createdAt(account.getCreatedAt())
+                .build();
+
+    }
+
+    @Override
+    public AccountResponse closeAccount(Long id, User currentUser) {
+        Account account = accountRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Account not found with ID: " + id));
+
+        if(!account.getUser().equals(currentUser)) {
+            throw new ValidationException("Only the account owner can close this account.");
+        }
+
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new ValidationException( "Only active accounts can be closed." );
+        }
+
+        if (account.getBalance().compareTo(BigDecimal.ZERO) > 0) {
+            throw new ValidationException(
+                    "Account cannot be closed until the balance is zero."
+            );
+        }
+
+        if (loanRepository.existsActiveLoanByAccount(account)) {
+            throw new ValidationException(
+                    "Account has active loans."
+            );
+        }
+
+
+        account.setStatus(AccountStatus.CLOSED);
+        accountRepository.save(account);
+
+        return AccountResponse.builder()
+                .message("Account Closed Successfully")
+                .status(AccountConstants.SUCCESS)
+                .build();
     }
 
     /**
@@ -120,13 +247,6 @@ public class AccountServiceImpl implements AccountService {
     public TransactionResponse debit(CreditDebitRequest creditDebitRequest) {
 
         String reference = UUID.randomUUID().toString();
-
-        // Check if the provided account number exists in the DB
-        boolean isAccountExists = accountRepository.existsByAccountNumber(creditDebitRequest.getAccountNumber());
-        if(!isAccountExists) {
-            throw new ResourceNotFoundException("Account not found with account number: "
-                    + creditDebitRequest.getAccountNumber());
-        }
 
         // Check if amount you intent to withdraw is not more than the current account balance
         Account accountToDebit = accountRepository.findByAccountNumber(creditDebitRequest.getAccountNumber()).orElseThrow(() -> new ResourceNotFoundException("Account not found with account number: " + creditDebitRequest.getAccountNumber()));

@@ -3,8 +3,11 @@ package com.banking.banking_app_apis.account.entity;
 import com.banking.banking_app_apis.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Builder
@@ -37,4 +40,10 @@ public class Account {
 
     @ManyToOne
     private User user;
+
+    @CreationTimestamp
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime modifiedAt;
 }
