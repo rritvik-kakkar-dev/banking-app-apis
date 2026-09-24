@@ -31,10 +31,9 @@ import GroupLimitModal from "../components/Budget/GroupLimitModal";
 function Dashboard({ showAllTransactions }) {
     const navigate = useNavigate();
 
-    const accountNumber = localStorage.getItem("accountNumber");
-
     const {
         accountInfo,
+        accountLoading,
         refreshAccountInfo
     } = useOutletContext();
 
@@ -52,17 +51,65 @@ function Dashboard({ showAllTransactions }) {
 
     const [budgetRefreshKey, setBudgetRefreshKey] = useState(0);
     const [selectedBudget, setSelectedBudget] = useState(null);
+    const [availableAccounts, setAvailableAccounts] = useState([]);
 
     const [groupCreatedSignal, setGroupCreatedSignal] = useState(null);
 
     const [selectedGroupLimit, setSelectedGroupLimit] = useState(null);
 
+    const [selectedAccountNumber, setSelectedAccountNumber] = useState(
+        localStorage.getItem("accountNumber") || ""
+    );
+
+    const accountNumber = selectedAccountNumber || localStorage.getItem("accountNumber") || "";
 
     useEffect(() => {
+        const fetchAllAccounts = async () => {
+            try {
+                const response = await api.get("/api/accounts", {
+                    params: {
+                        page: 0,
+                        limit: 10,
+                        sortBy: "createdAt",
+                        sortOrder: "DESC"
+                    }
+                });
+
+                const accounts = response.data?.content || [];
+                setAvailableAccounts(accounts);
+
+                if (accounts.length > 0) {
+                    const firstAccountNumber = String(accounts[0].accountNumber);
+                    const currentAccount = localStorage.getItem("accountNumber") || firstAccountNumber;
+
+                    setSelectedAccountNumber(currentAccount);
+                    localStorage.setItem("accountNumber", currentAccount);
+                }
+            } catch (error) {
+                console.error("Failed to fetch accounts", error);
+            }
+        };
+
+        fetchAllAccounts();
+    }, []);
+
+    useEffect(() => {
+        if (!accountNumber) {
+            setTransactions([]);
+            setTotalPages(0);
+            setError("Account not found. Please login again.");
+            return;
+        }
+
         fetchTransactionsHistory();
-    }, [page]);
+    }, [page, accountNumber]);
 
     const fetchTransactionsHistory = async () => {
+        if (!accountNumber) {
+            setError("Account not found. Please login again.");
+            return;
+        }
+
         try {
             setTransactionsLoading(true);
 
@@ -81,8 +128,10 @@ function Dashboard({ showAllTransactions }) {
 
             setTransactions(response.data.content);
             setTotalPages(response.data.totalPages);
+            setError("");
         } catch (error) {
-            setError("Failed to fetch transactions history");
+            console.error(error);
+            setError("Failed to fetch transactions history. Please check your access or login again.");
         } finally {
             setTransactionsLoading(false);
         }
@@ -199,7 +248,7 @@ function Dashboard({ showAllTransactions }) {
                     </div>
                 )}
 
-                {!accountInfo ? (
+                {accountLoading ? (
                     <div className="flex flex-col items-center justify-center mt-32 gap-4">
                         <svg
                             className="animate-spin h-8 w-8 text-blue-400"
@@ -226,6 +275,10 @@ function Dashboard({ showAllTransactions }) {
                             Loading account...
                         </p>
                     </div>
+                ) : !accountInfo ? (
+                    <div className="bg-yellow-50 border border-yellow-100 text-yellow-700 rounded-xl px-4 py-3 text-sm mb-6">
+                        Unable to load account details. Please login again or contact support.
+                    </div>
                 ) : (
                     <>
                         {/* Balance Card */}
@@ -235,7 +288,7 @@ function Dashboard({ showAllTransactions }) {
                             </p>
 
                             <h2 className="text-white text-5xl font-bold tracking-tight mb-6">
-                                ₹{accountInfo.accountBalance.toLocaleString("en-IN")}
+                                ₹{accountInfo.balance.toLocaleString("en-IN")}
                             </h2>
 
                             <div className="flex justify-between">
@@ -249,14 +302,51 @@ function Dashboard({ showAllTransactions }) {
                                     </p>
                                 </div>
 
-                                <div className="text-right">
+                                <div className="text-right min-w-0 max-w-[240px]">
                                     <p className="text-blue-200 text-xs uppercase tracking-wider mb-1">
                                         Account Holder
                                     </p>
 
-                                    <p className="text-white text-sm font-medium">
-                                        {accountInfo.accountName}
-                                    </p>
+                                    {/* Show all accounts listing */}
+                                    <div className="flex justify-end">
+                                        <select
+                                            value={selectedAccountNumber}
+                                            onChange={async (event) => {
+                                                const nextAccountNumber = event.target.value;
+                                                const selectedAccount = availableAccounts.find(
+                                                    (account) => String(account.accountNumber) === String(nextAccountNumber)
+                                                );
+
+                                                setSelectedAccountNumber(nextAccountNumber);
+                                                localStorage.setItem("accountNumber", nextAccountNumber);
+                                                if (selectedAccount) {
+                                                    localStorage.setItem("accountId", String(selectedAccount.id));
+                                                }
+                                                setPage(0);
+                                                await refreshAccountInfo(nextAccountNumber);
+                                            }}
+                                            className="w-auto min-w-[120px] max-w-[240px] bg-transparent border-0 outline-none p-0 cursor-pointer text-white text-sm font-medium text-right truncate"
+                                            style={{
+                                                appearance: "none",
+                                            }}
+                                        >
+                                            {availableAccounts.length > 0 ? (
+                                                availableAccounts.map((account) => (
+                                                    <option
+                                                        key={account.id}
+                                                        value={String(account.accountNumber)}
+                                                        className="text-gray-900"
+                                                    >
+                                                        {account.accountName}
+                                                    </option>
+                                                ))
+                                            ) : (
+                                                <option value={accountNumber || ""} className="text-gray-900">
+                                                    {accountInfo.accountName} ({accountNumber || accountInfo.accountNumber})
+                                                </option>
+                                            )}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>

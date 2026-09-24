@@ -39,7 +39,7 @@ function Profile() {
                             </div>
                             <div className="flex justify-between items-center py-3 border-b border-[#e8e8e3]">
                                 <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Balance</p>
-                                <p className="text-gray-900 font-bold">₹{accountInfo.accountBalance?.toLocaleString("en-IN")}</p>
+                                <p className="text-gray-900 font-bold">₹{accountInfo.balance?.toLocaleString("en-IN")}</p>
                             </div>
                             <div className="flex justify-between items-center py-3">
                                 <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Status</p>
