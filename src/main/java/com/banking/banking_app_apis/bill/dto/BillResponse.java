@@ -20,11 +20,13 @@ public class BillResponse {
     private Long id;
     private String billName;
     private String billerName;
+    private Integer autoPayEnabled;
     private BillPeriod billPeriod;
     private BillStatus status;
     private BigDecimal amount;
     private LocalDate paidAt;
     private String accountNumber;
     private String accountName;
+    private Integer monthlyDueDate;
     private LocalDateTime createdAt;
 }

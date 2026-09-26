@@ -22,7 +22,7 @@ public class BillPayment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne
+    @ManyToOne
     private Bill bill;
 
     private BigDecimal amount;

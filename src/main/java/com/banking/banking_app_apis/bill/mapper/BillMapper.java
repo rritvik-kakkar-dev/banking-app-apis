@@ -12,6 +12,7 @@ public class BillMapper {
                 .id(bill.getId())
                 .billName(bill.getBillName())
                 .billerName(bill.getBillerName())
+                .autoPayEnabled(bill.getAutopayEnabled())
                 .amount(bill.getBillAmount())
                 .billPeriod(bill.getBillPeriod())
                 .status(bill.getStatus())

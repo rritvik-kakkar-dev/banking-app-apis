@@ -26,6 +26,4 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     List<Account> findAllByUserAndStatus(User user, AccountStatus status);
 
-    List<Account> findAllByUser(User user);
-
 }
