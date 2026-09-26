@@ -78,4 +78,12 @@ public class AccountController {
                 accountService.closeAccount(id, currentUser)
         );
     }
+
+    @PutMapping("/default-account")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public ResponseEntity<AccountSummaryResponse> updateDefaultAccount(@RequestBody UpdateDefaultAccountRequest updateDefaultAccountRequest, @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(
+                accountService.updateDefaultAccount(updateDefaultAccountRequest, user)
+        );
+    }
 }

@@ -19,11 +19,11 @@ public class AccountSummaryResponse {
 
     private Long id;
     private String accountName;
-    private BigDecimal accountBalance;
     private String accountNumber;
     private AccountType accountType;
     private BigDecimal balance;
     private CurrencyType currency;
+    private boolean defaultAccount;
     private AccountStatus status;
     private LocalDateTime createdAt;
 

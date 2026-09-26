@@ -13,7 +13,12 @@ function Login() {
         try {
             const response = await api.post("/api/user/login", { email, password });
             localStorage.setItem("token", response.data.responseMessage);
-            localStorage.setItem("accountNumber", response.data.accountInfo.accountNumber);
+
+            const accountNumber = response.data?.accountInfo?.accountNumber ?? response.data?.accountNumber;
+            if (accountNumber) {
+                localStorage.setItem("accountNumber", String(accountNumber));
+            }
+
             window.location.href = "/dashboard";
         } catch (error) {
             setError("Invalid email or password");

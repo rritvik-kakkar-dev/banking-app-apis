@@ -3,13 +3,18 @@ package com.banking.banking_app_apis.user.service;
 import com.banking.banking_app_apis.account.constants.AccountConstants;
 import com.banking.banking_app_apis.account.dto.AccountSummaryResponse;
 import com.banking.banking_app_apis.account.entity.Account;
+import com.banking.banking_app_apis.account.entity.AccountStatus;
+import com.banking.banking_app_apis.account.mapper.AccountMapper;
+import com.banking.banking_app_apis.account.repository.AccountRepository;
 import com.banking.banking_app_apis.account.service.AccountService;
 import com.banking.banking_app_apis.common.dto.BankResponse;
 import com.banking.banking_app_apis.common.exception.DuplicateAccountException;
+import com.banking.banking_app_apis.common.exception.ResourceNotFoundException;
 import com.banking.banking_app_apis.notification.dto.EmailDetails;
 import com.banking.banking_app_apis.notification.service.EmailService;
 import com.banking.banking_app_apis.security.JwtTokenProvider;
 import com.banking.banking_app_apis.user.dto.LoginRequest;
+import com.banking.banking_app_apis.user.dto.LoginResponse;
 import com.banking.banking_app_apis.user.dto.UpdateUserRequest;
 import com.banking.banking_app_apis.user.entity.Role;
 import com.banking.banking_app_apis.user.entity.User;
@@ -21,6 +26,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 @Transactional
@@ -44,11 +51,26 @@ public class UserServiceImpl implements UserService {
     @Autowired
     AccountService accountService;
 
+    @Autowired
+    AccountRepository accountRepository;
 
-    public BankResponse login(LoginRequest loginRequest) {
+    @Autowired
+    AccountMapper accountMapper;
+
+
+    public LoginResponse login(LoginRequest loginRequest) {
+
+        User user = userRepository.findByEmail(loginRequest.getEmail()).orElseThrow(() -> new ResourceNotFoundException("This email is not registered with us, please try another email!"));
+
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
         );
+
+        List<Account> accounts =
+                accountRepository.findAllByUserAndStatus(
+                        user,
+                        AccountStatus.ACTIVE
+                );
 
         // Send Login Email
         EmailDetails loginAlert = EmailDetails.builder()
@@ -60,9 +82,14 @@ public class UserServiceImpl implements UserService {
 
         emailService.sendEmailAlert(loginAlert);
 
-        return BankResponse.builder()
-                .responseCode("Login Success")
-                .responseMessage(jwtTokenProvider.generateToken(authentication))
+        return LoginResponse.builder()
+                .message("Login Success")
+                .accessToken(jwtTokenProvider.generateToken(authentication))
+                .accounts(
+                        accounts.stream()
+                                .map(accountMapper::toSummaryResponse)
+                                .toList()
+                )
                 .build();
     }
 
@@ -108,7 +135,7 @@ public class UserServiceImpl implements UserService {
                 .responseCode(AccountConstants.ACCOUNT_CREATION_SUCCESS_CODE)
                 .responseMessage(AccountConstants.ACCOUNT_CREATION_SUCCESS_MESSAGE)
                 .accountSummaryResponse(AccountSummaryResponse.builder()
-                        .accountBalance(account.getBalance())
+                        .balance(account.getBalance())
                         .accountNumber(account.getAccountNumber())
                         .accountName(account.getAccountName())
                         .build())

@@ -17,6 +17,8 @@ public interface AccountService {
 
     AccountSummaryResponse updateAccount(Long id, UpdateAccountRequest request, User currentUser);
 
+    AccountSummaryResponse updateDefaultAccount(UpdateDefaultAccountRequest updateDefaultAccountRequest, User user);
+
     AccountResponse closeAccount(Long id, User currentUser);
 
     BalanceResponse balanceEnquiry(EnquiryRequest enquiryRequest);

@@ -129,7 +129,7 @@ public class AccountServiceImpl implements AccountService {
     public AccountSummaryResponse updateAccount(Long id, UpdateAccountRequest request, User currentUser) {
         Account account = accountRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("No Account found with ID: " + id));
 
-        if(!account.getUser().equals(currentUser)) {
+        if(!account.getUser().getId().equals(currentUser.getId())) {
             throw new ValidationException("Only account owner can update the account details");
         }
 
@@ -150,6 +150,40 @@ public class AccountServiceImpl implements AccountService {
                 .createdAt(account.getCreatedAt())
                 .build();
 
+    }
+
+    @Override
+    public AccountSummaryResponse updateDefaultAccount(UpdateDefaultAccountRequest updateDefaultAccountRequest, User user) {
+        Account defaultAccount = accountRepository.findByUserAndDefaultAccountTrue(user);
+
+        if(defaultAccount != null && defaultAccount.getId().equals(updateDefaultAccountRequest.getAccountId())) {
+            throw new ValidationException("This account is already your Default Account");
+        }
+
+        if(defaultAccount != null) {
+            defaultAccount.setDefaultAccount(false);
+            accountRepository.save(defaultAccount);
+        }
+
+        Account account = accountRepository.findById(updateDefaultAccountRequest.getAccountId()).orElseThrow(() -> new ResourceNotFoundException("No Account found with ID: " + updateDefaultAccountRequest.getAccountId()));
+
+        if(!account.getUser().getId().equals(user.getId())) {
+            throw new ValidationException("Only account owner can update the account details");
+        }
+
+        account.setDefaultAccount(true);
+        accountRepository.save(account);
+
+        return AccountSummaryResponse.builder()
+                .id(account.getId())
+                .accountNumber(account.getAccountNumber())
+                .accountName(account.getAccountName())
+                .accountType(account.getAccountType())
+                .balance(account.getBalance())
+                .currency(account.getCurrency())
+                .status(account.getStatus())
+                .createdAt(account.getCreatedAt())
+                .build();
     }
 
     @Override
