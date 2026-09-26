@@ -32,6 +32,9 @@ public class Account {
 
     private BigDecimal balance;
 
+    @Column(nullable = false)
+    private boolean defaultAccount;
+
     @Enumerated(EnumType.STRING)
     private AccountStatus status;
 

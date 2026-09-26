@@ -17,6 +17,7 @@ public class AccountMapper {
                 .accountNumber(account.getAccountNumber())
                 .balance(account.getBalance())
                 .currency(account.getCurrency())
+                .defaultAccount(account.isDefaultAccount())
                 .status(account.getStatus())
                 .createdAt(LocalDateTime.now())
                 .build();
